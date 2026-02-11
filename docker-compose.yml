@@ -1,0 +1,36 @@
+version: '3.9'
+
+services:
+  redis:
+    image: redis:7.0
+    container_name: nexis-redis
+    ports:
+      - "6379:6379"
+    restart: always
+
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: nexis-chroma
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+    restart: always
+
+  neo4j:
+    image: neo4j:5.12-community
+    container_name: nexis-neo4j
+    ports:
+      - "7474:7474" # HTTP
+      - "7687:7687" # Bolt
+    environment:
+      - NEO4J_AUTH=neo4j/nexis_password
+    volumes:
+      - neo4j_data:/data
+    restart: always
+
+volumes:
+  chroma_data:
+  neo4j_data:

@@ -1,0 +1,11 @@
+redis
+markitdown
+python-docx
+chromadb
+neo4j
+langchain-chroma
+langchain-openai
+python-dotenv
+fastapi
+uvicorn
+google-generativeai
