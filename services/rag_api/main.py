@@ -3,6 +3,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional
 import chromadb
 from chromadb.config import Settings
 import os
@@ -15,7 +16,7 @@ dotenv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.pa
 load_dotenv(dotenv_path)
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from python_services.db import get_db, Document, Project, SessionLocal
+from python_services.db import get_db, Document, Domain, TaxonomyNode, SessionLocal
 from sqlalchemy.orm import Session
 from fastapi import Depends, Form, UploadFile, File
 import traceback
@@ -70,6 +71,75 @@ async def update_settings(req: SettingsUpdate):
     redis_client.set("nexis:settings:llm_provider", req.llm_provider)
     return {"status": "success", "message": f"LLM Provider set to {req.llm_provider}"}
 
+class DomainCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+@app.get("/api/domains")
+def get_domains(db: Session = Depends(get_db)):
+    domains = db.query(Domain).all()
+    return [{"id": d.id, "name": d.name, "description": d.description} for d in domains]
+
+@app.post("/api/domains")
+def create_domain(domain: DomainCreate, db: Session = Depends(get_db)):
+    db_domain = Domain(id=str(uuid.uuid4()), name=domain.name, description=domain.description)
+    db.add(db_domain)
+    db.commit()
+    return {"status": "success", "id": db_domain.id}
+
+@app.delete("/api/domains/{domain_id}")
+def delete_domain(domain_id: str, db: Session = Depends(get_db)):
+    domain = db.query(Domain).filter(Domain.id == domain_id).first()
+    if domain:
+        db.delete(domain)
+        db.commit()
+        return {"status": "success"}
+    raise HTTPException(status_code=404, detail="Domain not found")
+
+class TaxonomyNodeCreate(BaseModel):
+    name: str
+    level: str
+    parentId: Optional[str] = None
+
+class TaxonomyNodeUpdate(BaseModel):
+    name: str
+
+@app.get("/api/domains/{domain_id}/taxonomy")
+def get_taxonomy(domain_id: str, db: Session = Depends(get_db)):
+    nodes = db.query(TaxonomyNode).filter(TaxonomyNode.domainId == domain_id).all()
+    return [{"id": n.id, "name": n.name, "level": n.level, "parentId": n.parentId} for n in nodes]
+
+@app.post("/api/domains/{domain_id}/taxonomy")
+def create_taxonomy_node(domain_id: str, node: TaxonomyNodeCreate, db: Session = Depends(get_db)):
+    db_node = TaxonomyNode(
+        id=str(uuid.uuid4()),
+        domainId=domain_id,
+        name=node.name,
+        level=node.level,
+        parentId=node.parentId
+    )
+    db.add(db_node)
+    db.commit()
+    return {"status": "success", "id": db_node.id}
+
+@app.delete("/api/domains/{domain_id}/taxonomy/{node_id}")
+def delete_taxonomy_node(domain_id: str, node_id: str, db: Session = Depends(get_db)):
+    node = db.query(TaxonomyNode).filter(TaxonomyNode.id == node_id, TaxonomyNode.domainId == domain_id).first()
+    if node:
+        db.delete(node)
+        db.commit()
+        return {"status": "success"}
+    raise HTTPException(status_code=404, detail="Node not found")
+
+@app.put("/api/domains/{domain_id}/taxonomy/{node_id}")
+def update_taxonomy_node(domain_id: str, node_id: str, node_update: TaxonomyNodeUpdate, db: Session = Depends(get_db)):
+    node = db.query(TaxonomyNode).filter(TaxonomyNode.id == node_id, TaxonomyNode.domainId == domain_id).first()
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+    node.name = node_update.name
+    db.commit()
+    return {"status": "success", "id": node.id, "name": node.name}
+
 # Initialize ChromaDB
 try:
     chroma_client = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT)
@@ -92,8 +162,9 @@ except Exception as e:
 class QueryRequest(BaseModel):
     query: str
     n_results: int = 3
+    domain_id: str = None
 
-def query_graph(search_term):
+def query_graph(search_term, domain_id=None):
     """
     Simple graph retrieval: Find nodes with names matching the search term (partial)
     and return their 1-hop relationships.
@@ -104,41 +175,34 @@ def query_graph(search_term):
     results = []
     try:
         with neo4j_driver.session() as session:
-            # Enhanced Query for 3-Tier Taxonomy (Module -> SubModule -> Entity)
-            # FILTER: Only consider documents with status = 'EFFECTIVE' (or null for legacy)
+            # Add domain filter if specified
+            domain_match = ""
+            if domain_id:
+                domain_match = f"MATCH (m)-[:IN_DOMAIN]->(:Domain {{id: '{domain_id}'}})"
+
             result = session.run(
-                """
+                f"""
                 // Strategy 1: Direct Entity Match (Enriched with hierarchy)
                 MATCH (e:Entity)
                 WHERE toLower(e.name) CONTAINS toLower($term)
                 MATCH (e)-[:MENTIONED_IN]->(d:Document)
                 WHERE coalesce(d.status, 'EFFECTIVE') = 'EFFECTIVE'
-                OPTIONAL MATCH (e)-[:BELONGS_TO]->(s:SubModule)-[:PART_OF]->(m:Module)
-                RETURN e.name + ' (' + e.type + ') belongs to ' + coalesce(m.name, 'Unknown') + ' > ' + coalesce(s.name, 'General') + ' [Source: ' + d.name + ']' as fact
+                OPTIONAL MATCH (e)-[:BELONGS_TO]->(tx:TaxonomyNode)
+                {domain_match}
+                RETURN e.name + ' (' + e.type + ') belongs to Category: ' + coalesce(tx.name, 'Unknown') + ' [Source: ' + d.name + ']' as fact
                 LIMIT 10
                 
                 UNION
                 
-                // Strategy 2: SubModule Match
-                MATCH (s:SubModule)
-                WHERE toLower(s.name) CONTAINS toLower($term)
-                MATCH (s)-[:PART_OF]->(m:Module)
-                OPTIONAL MATCH (e:Entity)-[:BELONGS_TO]->(s)
+                // Strategy 2: Taxonomy Match
+                MATCH (tx:TaxonomyNode)
+                WHERE toLower(tx.name) CONTAINS toLower($term)
+                {domain_match}
+                MATCH (e:Entity)-[:BELONGS_TO]->(tx)
                 MATCH (e)-[:MENTIONED_IN]->(d:Document)
                 WHERE coalesce(d.status, 'EFFECTIVE') = 'EFFECTIVE'
-                RETURN 'SubModule ' + s.name + ' is part of ' + m.name + ' and contains: ' + e.name + ' [Source: ' + d.name + ']' as fact
-                LIMIT 10
-
-                UNION
-
-                // Strategy 3: Module Match (Drill down)
-                MATCH (m:Module)
-                WHERE toLower(m.name) CONTAINS toLower($term)
-                MATCH (s:SubModule)-[:PART_OF]->(m)
-                MATCH (s)<-[:BELONGS_TO]-(e:Entity)-[:MENTIONED_IN]->(d:Document)
-                WHERE coalesce(d.status, 'EFFECTIVE') = 'EFFECTIVE'
-                RETURN 'Module ' + m.name + ' includes SubModule: ' + s.name + ' (Context from ' + d.name + ')' as fact
-                LIMIT 10
+                RETURN 'Category ' + tx.name + ' contains: ' + coalesce(e.name, 'No entities') + ' [Source: ' + d.name + ']' as fact
+                LIMIT 15
                 """,
                 term=search_term
             )
@@ -154,12 +218,13 @@ async def get_documents(db: Session = Depends(get_db)):
     docs = db.query(Document).filter(Document.status != "ARCHIVED").order_by(Document.createdAt.desc()).all()
     res = []
     for d in docs:
-        project_name = d.project.name if d.project else None
+        domain_name = d.domain.name if d.domain else None
         res.append({
             "id": d.id,
             "filename": d.filename,
             "version": d.version,
-            "projectName": project_name,
+            "domainName": domain_name,
+            "domainId": d.domainId,
             "jiraId": d.jiraId,
             "status": d.status,
             "errorMessage": getattr(d, 'error_message', None),
@@ -343,13 +408,21 @@ async def get_document_trace(filename: str):
     return trace_data
 
 @app.post("/retrieve")
-async def retrieve(request: QueryRequest):
+async def retrieve(request: QueryRequest, db: Session = Depends(get_db)):
     context_items = []
 
     # 1. Vector Search
-    if chroma_collection:
+    collection = chroma_collection
+    if request.domain_id:
+        safe_id = request.domain_id.replace('-', '_')
         try:
-            results = chroma_collection.query(
+            collection = chroma_client.get_or_create_collection(name=f"nexis_{safe_id}")
+        except Exception:
+            pass
+
+    if collection:
+        try:
+            results = collection.query(
                 query_texts=[request.query],
                 n_results=request.n_results
             )
@@ -372,7 +445,7 @@ async def retrieve(request: QueryRequest):
     # Let's take the first 2 significant words or the whole string if short.
     search_term = request.query.split(' ')[-1] if ' ' in request.query else request.query # Naive heuristic
     
-    graph_facts = query_graph(search_term)
+    graph_facts = query_graph(search_term, domain_id=request.domain_id)
     for fact in graph_facts:
          context_items.append({
             "type": "graph",
@@ -383,7 +456,7 @@ async def retrieve(request: QueryRequest):
     return {"context": context_items}
 
 @app.get("/graph/visualize")
-async def get_graph_visualization(limit: int = 300, search_query: str = None, exclude_types: str = None, expand_node_id: str = None):
+async def get_graph_visualization(limit: int = 300, search_query: str = None, exclude_types: str = None, expand_node_id: str = None, domain_id: str = None):
     nodes = []
     links = []
     
@@ -393,11 +466,16 @@ async def get_graph_visualization(limit: int = 300, search_query: str = None, ex
     if neo4j_driver:
         try:
             with neo4j_driver.session() as session:
+                domain_match = ""
+                if domain_id:
+                    domain_match = f"MATCH (n)-[*]-(:Domain {{id: '{domain_id}'}})"
+
                 if expand_node_id:
                     # Specific node expansion - exact 1 hop
                     query = f"""
                     MATCH (n)
                     WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id
+                    {domain_match}
                     MATCH (n)-[r]-(m)
                     RETURN n as s, r, m as t
                     LIMIT {limit}
@@ -405,7 +483,6 @@ async def get_graph_visualization(limit: int = 300, search_query: str = None, ex
                     result = session.run(query, expand_node_id=expand_node_id)
                 elif search_query:
                     # Search-driven progressive query
-                    # Strategy: Prioritize Exact matches first. If none, fallback to CONTAINS. Limit the blast radius.
                     query = f"""
                     CALL {{
                         MATCH (n:Entity) WHERE toLower(n.name) = toLower($search_query) RETURN n
@@ -413,6 +490,7 @@ async def get_graph_visualization(limit: int = 300, search_query: str = None, ex
                         MATCH (n:Entity) WHERE toLower(n.name) CONTAINS toLower($search_query) RETURN n
                     }}
                     WITH n LIMIT {limit // 10} // Limit the number of seed nodes to prevent massive subgraphs
+                    {domain_match}
                     MATCH (n)-[r]-(m)
                     RETURN n as s, r, m as t
                     LIMIT {limit}
@@ -422,6 +500,7 @@ async def get_graph_visualization(limit: int = 300, search_query: str = None, ex
                     # Default: get a comprehensive subgraph
                     query = f"""
                     MATCH (s)-[r]->(t)
+                    {domain_match}
                     RETURN s, r, t
                     LIMIT {limit}
                     """
@@ -437,8 +516,8 @@ async def get_graph_visualization(limit: int = 300, search_query: str = None, ex
                     
                     color = "#888"
                     val = 5
-                    if "Module" in node.labels: color, val = "#f43f5e", 24 # Rose
-                    elif "SubModule" in node.labels: color, val = "#f59e0b", 18 # Amber
+                    if "TaxonomyNode" in node.labels: color, val = "#f59e0b", 22 # Amber
+                    elif "Domain" in node.labels: color, val = "#f43f5e", 26 # Rose
                     elif "Document" in node.labels: color, val = "#10b981", 12 # Emerald
                     elif "Entity" in node.labels:
                         if entity_type == "Person/Role": color, val = "#94a3b8", 8 # Slate (less prominent)
@@ -516,7 +595,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 @app.post("/upload")
 async def upload_document(
     file: UploadFile = File(...),
-    projectName: str = Form(None),
+    domainId: str = Form(None),
     jiraId: str = Form(None),
     version: str = Form("v1.0"),
     db: Session = Depends(get_db)
@@ -526,22 +605,12 @@ async def upload_document(
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        # 1. Update DB Tracking Postgres
-        project_id = None
-        if projectName:
-            proj = db.query(Project).filter(Project.name == projectName).first()
-            if not proj:
-                proj = Project(id=str(uuid.uuid4()), name=projectName)
-                db.add(proj)
-                db.flush()
-            project_id = proj.id
-            
         doc_id = str(uuid.uuid4())
         doc = Document(
             id=doc_id,
             filename=file.filename,
             version=version,
-            projectId=project_id,
+            domainId=domainId,
             jiraId=jiraId,
             status="QUEUED"
         )
@@ -602,17 +671,26 @@ class ChatRequest(BaseModel):
     query: str
     history: list = [] # List of {role: str, content: str}
     n_results: int = 5
+    domain_id: str = None
 
 @app.post("/chat")
-async def chat_endpoint(request: ChatRequest):
+async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
     # 1. Retrieve Context
     context_str = ""
     sources = []
     
     # Vector Search
-    if chroma_collection:
+    collection = chroma_collection
+    if request.domain_id:
+        safe_id = request.domain_id.replace('-', '_')
         try:
-            results = chroma_collection.query(query_texts=[request.query], n_results=request.n_results)
+            collection = chroma_client.get_or_create_collection(name=f"nexis_{safe_id}")
+        except Exception:
+            pass
+
+    if collection:
+        try:
+            results = collection.query(query_texts=[request.query], n_results=request.n_results)
             if results['documents']:
                 for doc, meta in zip(results['documents'][0], results['metadatas'][0]):
                     src = meta.get("source", "unknown")
@@ -622,7 +700,7 @@ async def chat_endpoint(request: ChatRequest):
             print(f"Vector search failed: {e}")
 
     # Graph Search
-    graph_facts = query_graph(request.query)
+    graph_facts = query_graph(request.query, domain_id=request.domain_id)
     for fact in graph_facts:
         context_str += f"- [Graph] {fact}\n"
 

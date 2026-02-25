@@ -4,18 +4,21 @@ import Chat from './components/Chat';
 import GraphExplorer from './pages/GraphExplorer';
 import AdminPage from './pages/AdminPage';
 import KnowledgeBase from './pages/KnowledgeBase';
+import { GlobalDomainProvider } from './contexts/GlobalDomainContext';
 
 function App() {
   return (
     <HashRouter>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<Chat />} />
-          <Route path="/graph" element={<GraphExplorer />} />
-          <Route path="/admin" element={<AdminPage />} />
-          <Route path="/kb" element={<KnowledgeBase />} />
-        </Routes>
-      </Layout>
+      <GlobalDomainProvider>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<Chat />} />
+            <Route path="/graph" element={<GraphExplorer />} />
+            <Route path="/admin" element={<AdminPage />} />
+            <Route path="/kb" element={<KnowledgeBase />} />
+          </Routes>
+        </Layout>
+      </GlobalDomainProvider>
     </HashRouter>
   )
 }

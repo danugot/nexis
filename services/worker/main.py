@@ -40,16 +40,7 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 QUEUE_NAME = 'nexis:ingest:queue'
 KNOWLEDGE_DIR = 'knowledge'
 
-# Load Taxonomy Seed
-TAXONOMY_PATH = os.path.join(os.path.dirname(__file__), 'taxonomy_seed.yaml')
-TAXONOMY_CONTENT = ""
-if os.path.exists(TAXONOMY_PATH):
-    with open(TAXONOMY_PATH, 'r') as f:
-        TAXONOMY_CONTENT = f.read()
-else:
-    print("Warning: taxonomy_seed.yaml not found.")
-
-
+# Load Taxonomy dynamically per domain in extract_and_ingest_graph
 # Initialize Clients
 try:
     redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
@@ -153,14 +144,18 @@ def semantic_chunking(markdown_text, max_chunk_size=1000):
         
     return chunks
 
-def ingest_to_vector_db(filename, content):
+def ingest_to_vector_db(filename, content, domain_id=None):
     """
     Ingests text content into ChromaDB using semantic chunking.
     """
-    # Re-fetch collection to handle potential restarts/stale connections
     try:
-        global chroma_collection
-        chroma_collection = chroma_client.get_or_create_collection(name="nexis_knowledge")
+        global chroma_client
+        collection_name = "nexis_knowledge"
+        if domain_id:
+            safe_id = domain_id.replace('-', '_')
+            collection_name = f"nexis_{safe_id}"
+            
+        chroma_collection = chroma_client.get_or_create_collection(name=collection_name)
     except Exception as e:
         print(f"Error connecting to ChromaDB: {e}")
         return
@@ -180,11 +175,55 @@ def ingest_to_vector_db(filename, content):
     except Exception as e:
         print(f"Error ingesting to ChromaDB: {e}")
 
-def extract_and_ingest_graph(filename, content):
+def extract_and_ingest_graph(filename, content, domain_id=None):
     if not neo4j_driver or not client:
         return
 
     print("Extracting graph entities (Semantic Batched)...")
+    
+    # 1. Fetch Dynamic Taxonomy
+    db = SessionLocal()
+    taxonomy_content = "No specific taxonomy defined for this domain."
+    domain_name = "Default Domain"
+    taxonomy_paths = {}
+    if domain_id:
+        from python_services.db import TaxonomyNode, Domain
+        domain = db.query(Domain).filter(Domain.id == domain_id).first()
+        if domain:
+            domain_name = domain.name
+            
+        nodes = db.query(TaxonomyNode).filter(TaxonomyNode.domainId == domain_id).all()
+        
+        def build_path(node_id, current_nodes):
+            node = next((n for n in current_nodes if n.id == node_id), None)
+            if not node: return ""
+            if not node.parentId: return node.name
+            parent_path = build_path(node.parentId, current_nodes)
+            return f"{parent_path} > {node.name}" if parent_path else node.name
+            
+        if nodes:
+            paths = []
+            for n in nodes:
+                path = build_path(n.id, nodes)
+                taxonomy_paths[path] = n.id
+                paths.append(path)
+                
+            taxonomy_content = "Available Categories:\n" + "\n".join([f"- {p}" for p in paths])
+            
+            with neo4j_driver.session() as session:
+                session.run("MERGE (dom:Domain {id: $domain_id}) ON CREATE SET dom.name = $domain_name", 
+                            domain_id=domain_id, domain_name=domain_name)
+                for n in nodes:
+                    session.run("MERGE (nx:TaxonomyNode {id: $nid}) SET nx.name = $name WITH nx MATCH (dom:Domain {id: $domain_id}) MERGE (nx)-[:IN_DOMAIN]->(dom)",
+                                nid=n.id, name=n.name, domain_id=domain_id)
+                for n in nodes:
+                    if n.parentId:
+                        session.run("MATCH (child:TaxonomyNode {id: $child_id}) MATCH (parent:TaxonomyNode {id: $parent_id}) MERGE (child)-[:PART_OF]->(parent)",
+                                    child_id=n.id, parent_id=n.parentId)
+    db.close()
+    
+    if not taxonomy_content.strip() or taxonomy_content == "Available Categories:\n":
+        taxonomy_content = "No specific taxonomy defined for this domain. Please infer categories."
 
     # Use semantic chunking for context-aware extraction windows
     semantic_chunks = semantic_chunking(content, max_chunk_size=1000)
@@ -224,16 +263,14 @@ def extract_and_ingest_graph(filename, content):
         Analyze the following text from a technical specification document.
         
         ### Master Taxonomy (Reference this for categorization):
-        {TAXONOMY_CONTENT}
+        {taxonomy_content}
         
         ### Tasks:
-        1. **Classify**: Identify the **Module** AND **SubModule** this text belongs to.
-           - Use the Taxonomy above based on the [Context] headers provided in the text.
-           - **Primary Module**: (e.g., "出票业务")
-           - **Sub-Module**: (e.g., "出票登记" or "提示承兑").
+        1. **Classify**: Identify the most granular, specific **Category Path** this text belongs to.
+           - Pick exactly ONE full path from the Available Categories above (e.g. "A > B > C").
         2. **Extract**: Identify key entities and their relationships.
            - You are operating on a small, dense semantic window. Extract EVERY pertinent domain entity.
-           - **CRITICAL DE-DUPLICATION RULE**: Do NOT extract any entity whose name is literally identical to the `primary_module` or `sub_module`. (e.g., if the sub-module is "出票登记", do not create an entity named "出票登记"). The system already models the module hierarchy; extracting it again as a standalone entity creates graph pollution.
+           - **CRITICAL DE-DUPLICATION RULE**: Do NOT extract any entity whose name is literally identical to the category. The system already models the hierarchy; extracting it again as a standalone entity creates graph pollution.
         
         Target Entity Types:
         - **Person/Role**: (e.g., "出质人", "承兑方", "复核员")
@@ -247,8 +284,7 @@ def extract_and_ingest_graph(filename, content):
         
         Return JSON format:
         {{
-          "primary_module": "Name from Taxonomy",
-          "sub_module": "SubModule Name",
+          "category_path": "One full exact path from the taxonomy list above, or 'Uncategorized'",
           "nodes": [{{"name": "Entity Name", "type": "Entity Type"}}],
           "edges": [{{"source": "Entity Name", "target": "Entity Name", "relation": "RELATIONSHIP_TYPE"}}],
           "valid_json": true
@@ -266,7 +302,7 @@ def extract_and_ingest_graph(filename, content):
             try:
                 if llm_provider == "qwen-plus" and openai_client:
                     completion = openai_client.chat.completions.create(
-                        model="qwen-plus",
+                        model="qwen3.5-plus",
                         messages=[{"role": "user", "content": prompt}],
                         temperature=0.1
                     )
@@ -311,13 +347,8 @@ def extract_and_ingest_graph(filename, content):
         elif not isinstance(data, dict):
              return None
 
-        primary_module = data.get("primary_module")
-        if not primary_module:
-            primary_module = "Uncategorized"
-            
-        sub_module = data.get("sub_module")
-        if not sub_module:
-            sub_module = "General"
+        category_path = data.get("category_path", "Uncategorized")
+        tax_id = taxonomy_paths.get(category_path, None)
 
         try:
             with neo4j_driver.session() as session:
@@ -330,23 +361,27 @@ def extract_and_ingest_graph(filename, content):
                     filename=filename
                 )
 
-                # 2. Create Module Hierarchy: (SubModule)-[:PART_OF]->(Module)
-                session.run(
-                    """
-                    MERGE (m:Module {name: $module_name})
-                    MERGE (s:SubModule {name: $sub_module_name})
-                    MERGE (s)-[:PART_OF]->(m)
-                    
-                    WITH m, s
-                    MATCH (d:Document {name: $filename})
-                    MERGE (d)-[:CONTAINS]->(s)
-                    """,
-                    module_name=primary_module, 
-                    sub_module_name=sub_module,
-                    filename=filename
-                )
+                # 2. Link Document to selected TaxonomyNode or Domain
+                if tax_id:
+                    session.run(
+                        """
+                        MATCH (d:Document {name: $filename})
+                        MATCH (tx:TaxonomyNode {id: $tax_id})
+                        MERGE (d)-[:CONTAINS]->(tx)
+                        """,
+                        filename=filename, tax_id=tax_id
+                    )
+                else:
+                    session.run(
+                        """
+                        MATCH (d:Document {name: $filename})
+                        MATCH (dom:Domain {id: $domain_id})
+                        MERGE (d)-[:IN_DOMAIN]->(dom)
+                        """,
+                        filename=filename, domain_id=domain_id or 'default'
+                    )
 
-                # 3. Create Nodes & Link primarily to SubModule (and implicitly Module via hierarchy)
+                # 3. Create Nodes & Link to Document and optionally to TaxonomyNode
                 for node in data.get("nodes", []):
                     session.run(
                         """
@@ -355,17 +390,21 @@ def extract_and_ingest_graph(filename, content):
                             n.extracted_by = $llm_provider
                         WITH n
                         MATCH (d:Document {name: $filename})
-                        MATCH (s:SubModule {name: $sub_module_name})
-                        MATCH (m:Module {name: $module_name})
                         MERGE (n)-[:MENTIONED_IN]->(d)
-                        MERGE (n)-[:BELONGS_TO]->(s)
                         """,
                         name=node["name"], type=node["type"], 
                         llm_provider=llm_provider,
-                        filename=filename, 
-                        sub_module_name=sub_module,
-                        module_name=primary_module
+                        filename=filename
                     )
+                    if tax_id:
+                        session.run(
+                            """
+                            MATCH (n:Entity {name: $name}) 
+                            MATCH (tx:TaxonomyNode {id: $tax_id})
+                            MERGE (n)-[:BELONGS_TO]->(tx)
+                            """,
+                            name=node["name"], tax_id=tax_id
+                        )
                 
                 # 4. Create Edges
                 for edge in data.get("edges", []):
@@ -435,10 +474,12 @@ def process_file(file_path, document_id=None):
         
     db = SessionLocal()
     try:
+        domain_id = None
         if document_id:
             print(f"Updating Postgres document {document_id} to PROCESSING...")
             doc = db.query(Document).filter(Document.id == document_id).first()
             if doc:
+                domain_id = doc.domainId
                 doc.status = "PROCESSING"
                 db.commit()
                 print("Set status to PROCESSING.")
@@ -458,8 +499,8 @@ def process_file(file_path, document_id=None):
             
         print(f"Converted to {output_path} using MarkItDown")
 
-        ingest_to_vector_db(filename, md_content)
-        extract_and_ingest_graph(filename, md_content)
+        ingest_to_vector_db(filename, md_content, domain_id)
+        extract_and_ingest_graph(filename, md_content, domain_id)
 
         if document_id:
             doc = db.query(Document).filter(Document.id == document_id).first()

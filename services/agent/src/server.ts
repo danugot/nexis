@@ -150,7 +150,16 @@ app.post('/api/analyze-conflict', async (req, res) => {
 // Get all sessions
 app.get('/sessions', async (req, res) => {
     try {
+        const { domainId } = req.query;
+        let whereClause = {};
+        if (domainId) {
+            whereClause = { domainId: String(domainId) };
+        } else {
+            whereClause = { domainId: null };
+        }
+
         const sessions = await prisma.session.findMany({
+            where: whereClause,
             orderBy: { updatedAt: 'desc' }
         });
         res.json(sessions);
@@ -162,8 +171,12 @@ app.get('/sessions', async (req, res) => {
 // Create a new session
 app.post('/sessions', async (req, res) => {
     try {
+        const { domainId } = req.body || {};
         const session = await prisma.session.create({
-            data: { title: "New Chat" }
+            data: {
+                title: "New Chat",
+                domainId: domainId || null
+            }
         });
         res.json(session);
     } catch (e: any) {
@@ -195,7 +208,7 @@ app.get('/sessions/:id/messages', async (req, res) => {
 });
 
 app.post('/chat', async (req, res) => {
-    const { query, sessionId } = req.body;
+    const { query, sessionId, domainId } = req.body;
 
     if (!query || !sessionId) {
         return res.status(400).json({ error: 'Query and sessionId are required.' });
@@ -303,7 +316,7 @@ app.post('/chat', async (req, res) => {
 
                 try {
                     if (name === "retrieve_knowledge") {
-                        toolResult = await retrieveKnowledge(args);
+                        toolResult = await retrieveKnowledge(args, domainId);
                     } else if (name === "check_conflict") {
                         toolResult = await checkConflict(args);
                     } else if (name === "withdraw_skill") {

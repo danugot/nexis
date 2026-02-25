@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { MessageSquare, Share2, Settings, FileText, Database, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
+import { GlobalDomainSelector } from './GlobalDomainSelector';
 import {
     Dialog,
     DialogContent,
@@ -76,7 +77,9 @@ export default function Layout({ children }: LayoutProps) {
                     <p className="text-xs text-muted-foreground mt-1">Knowledge Lifecycle System</p>
                 </div>
 
-                <nav className="flex-1 px-4 space-y-1">
+                <GlobalDomainSelector />
+
+                <nav className="flex-1 px-4 py-4 space-y-1">
                     <NavItem to="/" icon={MessageSquare} label="Smart Chat" />
                     <NavItem to="/graph" icon={Share2} label="Graph Explorer" />
                     <NavItem to="/kb" icon={Database} label="Knowledge Base" />
@@ -116,7 +119,7 @@ export default function Layout({ children }: LayoutProps) {
                                 >
                                     <div>
                                         <h4 className="font-semibold text-sm">Qwen 3.5 Plus</h4>
-                                        <p className="text-xs text-muted-foreground mt-1">qwen-plus. Highly capable reasoning model.</p>
+                                        <p className="text-xs text-muted-foreground mt-1">qwen3.5-plus. Highly capable reasoning model.</p>
                                     </div>
                                     {provider === 'qwen-plus' && <Check className="h-4 w-4 text-primary" />}
                                 </button>

@@ -3,15 +3,7 @@
 > vite -- --port 5173 --strictPort
 
 
-  VITE v7.3.1  ready in 107 ms
+  VITE v7.3.1  ready in 1308 ms
 
   ➜  Local:   http://localhost:5173/
   ➜  Network: use --host to expose
-11:29:07 AM [vite] http proxy error: /api/settings
-AggregateError [ECONNREFUSED]: 
-    at internalConnectMultiple (node:net:1134:18)
-    at afterConnectMultiple (node:net:1715:7)
-11:29:07 AM [vite] http proxy error: /api/settings
-AggregateError [ECONNREFUSED]: 
-    at internalConnectMultiple (node:net:1134:18)
-    at afterConnectMultiple (node:net:1715:7)

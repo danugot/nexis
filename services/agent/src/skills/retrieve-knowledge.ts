@@ -17,14 +17,14 @@ export interface RetrieveKnowledgeResult {
     formatted_output: string; // Helper for LLM consumption
 }
 
-export async function retrieveKnowledge(input: RetrieveKnowledgeInput): Promise<RetrieveKnowledgeResult> {
+export async function retrieveKnowledge(input: RetrieveKnowledgeInput, domainId?: string): Promise<RetrieveKnowledgeResult> {
     const { query, n_results = 3 } = input;
 
     try {
         const response = await fetch("http://localhost:8001/retrieve", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ query, n_results })
+            body: JSON.stringify({ query, n_results, domain_id: domainId })
         });
 
         if (!response.ok) {

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { RefreshCw, ZoomIn, ZoomOut, Maximize, Search } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import axios from 'axios';
+import { useGlobalDomain } from '../contexts/GlobalDomainContext';
 
 interface Node {
     id: string;
@@ -29,6 +30,7 @@ interface GraphData {
 
 
 export default function GraphExplorer() {
+    const { activeDomain } = useGlobalDomain();
     const [data, setData] = useState<GraphData>({ nodes: [], links: [] });
     const [loading, setLoading] = useState(true);
     const [containerDimensions, setContainerDimensions] = useState({ width: 800, height: 600 });
@@ -45,6 +47,9 @@ export default function GraphExplorer() {
             const params = new URLSearchParams({ limit: '500' });
             if (searchQuery.trim()) {
                 params.append('search_query', searchQuery.trim());
+            }
+            if (activeDomain) {
+                params.append('domain_id', activeDomain.id);
             }
             if (!showPersons) {
                 params.append('exclude_types', 'Person/Role');
@@ -66,11 +71,11 @@ export default function GraphExplorer() {
         }
     };
 
-    // Auto-fetch when component mounts and mostly when "showPersons" toggles
+    // Auto-fetch when component mounts and mostly when "showPersons" or "activeDomain" toggles
     useEffect(() => {
         fetchGraph();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [showPersons]);
+    }, [showPersons, activeDomain]);
 
     // Responsive graph sizing
     useEffect(() => {
@@ -181,6 +186,7 @@ export default function GraphExplorer() {
                             onNodeClick={async (node: any) => {
                                 try {
                                     const params = new URLSearchParams({ limit: '100', expand_node_id: node.id });
+                                    if (activeDomain) params.append('domain_id', activeDomain.id);
                                     if (!showPersons) {
                                         params.append('exclude_types', 'Person/Role');
                                     }

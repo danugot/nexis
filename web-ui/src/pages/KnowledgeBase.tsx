@@ -22,6 +22,7 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog';
 import { DocumentTraceSheet } from '@/components/DocumentTraceSheet';
+import { useGlobalDomain } from '../contexts/GlobalDomainContext';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001';
 
@@ -47,6 +48,7 @@ export interface ConflictRecord {
 }
 
 export default function KnowledgeBase() {
+    const { activeDomain } = useGlobalDomain();
     const [documents, setDocuments] = useState<DocumentRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [uploadOpen, setUploadOpen] = useState(false);
@@ -69,7 +71,11 @@ export default function KnowledgeBase() {
         try {
             const res = await fetch(`${API_BASE_URL}/documents`);
             const data = await res.json();
-            setDocuments(data);
+            if (activeDomain) {
+                setDocuments(data.filter((d: any) => d.domainId === activeDomain.id));
+            } else {
+                setDocuments(data);
+            }
         } catch (error) {
             console.error('Failed to fetch documents', error);
         } finally {
@@ -79,7 +85,7 @@ export default function KnowledgeBase() {
 
     useEffect(() => {
         fetchDocuments();
-    }, []);
+    }, [activeDomain]);
 
     const handleUpload = async (data: any) => {
         if (!data.file || data.file.length === 0) return;
@@ -87,7 +93,7 @@ export default function KnowledgeBase() {
         setUploading(true);
         const formData = new FormData();
         formData.append('file', data.file[0]);
-        if (data.projectName) formData.append('projectName', data.projectName);
+        if (activeDomain) formData.append('domainId', activeDomain.id);
         if (data.jiraId) formData.append('jiraId', data.jiraId);
         if (data.version) formData.append('version', data.version);
 
@@ -218,8 +224,11 @@ export default function KnowledgeBase() {
                                     </div>
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="projectName">Project Name</Label>
-                                    <Input id="projectName" placeholder="e.g. Core Banking System" {...register('projectName')} />
+                                    <Label>Target Domain</Label>
+                                    <div className="text-sm font-medium bg-slate-50 border px-3 py-2 rounded-md">
+                                        {activeDomain ? activeDomain.name : 'Unknown Domain'}
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground">To upload to a different domain, please change it in the left sidebar.</p>
                                 </div>
                                 <div className="pt-4 flex justify-end gap-2">
                                     <Button type="button" variant="outline" onClick={() => setUploadOpen(false)}>Cancel</Button>

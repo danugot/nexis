@@ -4,8 +4,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { MessageSquare, Plus, Trash2 } from "lucide-react"
+import { useGlobalDomain } from '../contexts/GlobalDomainContext'
 
 export default function Chat() {
+    const { activeDomain } = useGlobalDomain();
     const [messages, setMessages] = useState<any[]>([])
     const [input, setInput] = useState('')
     const [loading, setLoading] = useState(false)
@@ -24,14 +26,18 @@ export default function Chat() {
         scrollToBottom()
     }, [messages])
 
-    // Load Sessions on Mount
+    // Load Sessions when Domain changes
     useEffect(() => {
         fetchSessions()
-    }, [])
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeDomain])
 
     const fetchSessions = async () => {
         try {
-            const res = await fetch(`${agentUrl}/sessions`)
+            const url = new URL(`${agentUrl}/sessions`, window.location.origin)
+            if (activeDomain) url.searchParams.append('domainId', activeDomain.id)
+
+            const res = await fetch(url.toString())
             const data = await res.json()
             setSessions(data)
             if (data.length > 0 && !currentSessionId) {
@@ -46,7 +52,11 @@ export default function Chat() {
 
     const createNewSession = async () => {
         try {
-            const res = await fetch(`${agentUrl}/sessions`, { method: 'POST' })
+            const res = await fetch(`${agentUrl}/sessions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ domainId: activeDomain?.id })
+            })
             const data = await res.json()
             setSessions([data, ...sessions])
             setCurrentSessionId(data.id)
@@ -107,7 +117,8 @@ export default function Chat() {
                 },
                 body: JSON.stringify({
                     query: currentInput,
-                    sessionId: currentSessionId
+                    sessionId: currentSessionId,
+                    domainId: activeDomain?.id
                 })
             });
 

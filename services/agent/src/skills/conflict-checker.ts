@@ -108,7 +108,7 @@ export async function checkConflict(input: ConflictInput): Promise<ConflictResul
 
         if (provider === "qwen-plus") {
             const completion = await openai.chat.completions.create({
-                model: "qwen-plus",
+                model: "qwen3.5-plus",
                 messages: [{ role: "user", content: prompt }]
             });
             text = completion.choices[0].message.content || "";

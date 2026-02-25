@@ -16,6 +16,7 @@ datasource db {
 model Session {
   id        String    @id @default(uuid())
   title     String    @default("New Chat")
+  domainId  String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   messages  Message[]
