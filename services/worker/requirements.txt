@@ -1,0 +1,8 @@
+redis
+python-docx
+chromadb
+neo4j
+google-genai
+python-dotenv
+markitdown[all]
+PyYAML

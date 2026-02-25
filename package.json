@@ -1,27 +1,6 @@
 {
-  "name": "nexis",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "packageManager": "pnpm@10.17.1",
   "dependencies": {
-    "@google/generative-ai": "^0.24.1",
-    "@mariozechner/pi-coding-agent": "^0.52.9",
-    "@types/node-fetch": "^2.6.13",
-    "dotenv": "^17.2.4",
-    "ioredis": "^5.9.2",
-    "node-fetch": "^2.7.0"
-  },
-  "devDependencies": {
-    "@types/ioredis": "^4.28.10",
-    "@types/node": "^25.2.3",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "@prisma/client": "^7.4.1",
+    "prisma": "^7.4.1"
   }
 }

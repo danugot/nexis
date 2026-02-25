@@ -1,0 +1,225 @@
+RAG Server connected to Redis at localhost:6380
+RAG Server connected to ChromaDB at localhost:8000
+RAG Server connected to Neo4j at bolt://localhost:7687
+RAG API connecting to Redis at localhost:6380
+RAG Server connected to Gemini API
+INFO:     Started server process [30192]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+INFO:     127.0.0.1:59073 - "GET /graph/visualize?search_query=%E8%B4%A8%E6%8A%BC%E7%94%B3%E8%AF%B7 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59368 - "GET /graph/visualize?limit=500&search_query=%E8%B4%A8%E6%8A%BC%E7%94%B3%E8%AF%B7&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+Graph visualization error: {neo4j_code: Neo.ClientError.Statement.SyntaxError} {message: Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^} {gql_status: 50N42} {gql_status_description: error: general processing exception - unexpected error. Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^}
+Traceback (most recent call last):
+  File "/Users/danugo/workspace/work/nexis/services/rag_api/main.py", line 405, in get_graph_visualization
+    result = session.run(query, expand_node_id=expand_node_id)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/work/session.py", line 320, in run
+    self._auto_result._run(
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/work/result.py", line 237, in _run
+    self._attach()
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/work/result.py", line 439, in _attach
+    self._connection.fetch_message()
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/io/_common.py", line 193, in inner
+    func(*args, **kwargs)
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/io/_bolt.py", line 867, in fetch_message
+    res = self._process_message(tag, fields)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/io/_bolt5.py", line 496, in _process_message
+    response.on_failure(summary_metadata or {})
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/io/_common.py", line 263, in on_failure
+    raise self._hydrate_error(metadata)
+neo4j.exceptions.CypherSyntaxError: {neo4j_code: Neo.ClientError.Statement.SyntaxError} {message: Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^} {gql_status: 50N42} {gql_status_description: error: general processing exception - unexpected error. Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^}
+INFO:     127.0.0.1:59376 - "GET /graph/visualize?limit=100&expand_node_id=4%3Ad34a3413-c64f-4c1b-9866-1dfa6feff61f%3A61&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+Graph visualization error: {neo4j_code: Neo.ClientError.Statement.SyntaxError} {message: Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^} {gql_status: 50N42} {gql_status_description: error: general processing exception - unexpected error. Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^}
+Traceback (most recent call last):
+  File "/Users/danugo/workspace/work/nexis/services/rag_api/main.py", line 405, in get_graph_visualization
+    result = session.run(query, expand_node_id=expand_node_id)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/work/session.py", line 320, in run
+    self._auto_result._run(
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/work/result.py", line 237, in _run
+    self._attach()
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/work/result.py", line 439, in _attach
+    self._connection.fetch_message()
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/io/_common.py", line 193, in inner
+    func(*args, **kwargs)
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/io/_bolt.py", line 867, in fetch_message
+    res = self._process_message(tag, fields)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/io/_bolt5.py", line 496, in _process_message
+    response.on_failure(summary_metadata or {})
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/io/_common.py", line 263, in on_failure
+    raise self._hydrate_error(metadata)
+neo4j.exceptions.CypherSyntaxError: {neo4j_code: Neo.ClientError.Statement.SyntaxError} {message: Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^} {gql_status: 50N42} {gql_status_description: error: general processing exception - unexpected error. Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^}
+INFO:     127.0.0.1:59379 - "GET /graph/visualize?limit=100&expand_node_id=4%3Ad34a3413-c64f-4c1b-9866-1dfa6feff61f%3A61&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+Graph visualization error: {neo4j_code: Neo.ClientError.Statement.SyntaxError} {message: Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^} {gql_status: 50N42} {gql_status_description: error: general processing exception - unexpected error. Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^}
+Traceback (most recent call last):
+  File "/Users/danugo/workspace/work/nexis/services/rag_api/main.py", line 405, in get_graph_visualization
+    result = session.run(query, expand_node_id=expand_node_id)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/work/session.py", line 320, in run
+    self._auto_result._run(
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/work/result.py", line 237, in _run
+    self._attach()
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/work/result.py", line 439, in _attach
+    self._connection.fetch_message()
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/io/_common.py", line 193, in inner
+    func(*args, **kwargs)
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/io/_bolt.py", line 867, in fetch_message
+    res = self._process_message(tag, fields)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/io/_bolt5.py", line 496, in _process_message
+    response.on_failure(summary_metadata or {})
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/io/_common.py", line 263, in on_failure
+    raise self._hydrate_error(metadata)
+neo4j.exceptions.CypherSyntaxError: {neo4j_code: Neo.ClientError.Statement.SyntaxError} {message: Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^} {gql_status: 50N42} {gql_status_description: error: general processing exception - unexpected error. Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^}
+INFO:     127.0.0.1:59382 - "GET /graph/visualize?limit=100&expand_node_id=4%3Ad34a3413-c64f-4c1b-9866-1dfa6feff61f%3A61&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+Graph visualization error: {neo4j_code: Neo.ClientError.Statement.SyntaxError} {message: Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^} {gql_status: 50N42} {gql_status_description: error: general processing exception - unexpected error. Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^}
+Traceback (most recent call last):
+  File "/Users/danugo/workspace/work/nexis/services/rag_api/main.py", line 405, in get_graph_visualization
+    result = session.run(query, expand_node_id=expand_node_id)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/work/session.py", line 320, in run
+    self._auto_result._run(
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/work/result.py", line 237, in _run
+    self._attach()
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/work/result.py", line 439, in _attach
+    self._connection.fetch_message()
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/io/_common.py", line 193, in inner
+    func(*args, **kwargs)
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/io/_bolt.py", line 867, in fetch_message
+    res = self._process_message(tag, fields)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/io/_bolt5.py", line 496, in _process_message
+    response.on_failure(summary_metadata or {})
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/io/_common.py", line 263, in on_failure
+    raise self._hydrate_error(metadata)
+neo4j.exceptions.CypherSyntaxError: {neo4j_code: Neo.ClientError.Statement.SyntaxError} {message: Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^} {gql_status: 50N42} {gql_status_description: error: general processing exception - unexpected error. Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^}
+INFO:     127.0.0.1:59385 - "GET /graph/visualize?limit=100&expand_node_id=4%3Ad34a3413-c64f-4c1b-9866-1dfa6feff61f%3A61&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+Graph visualization error: {neo4j_code: Neo.ClientError.Statement.SyntaxError} {message: Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^} {gql_status: 50N42} {gql_status_description: error: general processing exception - unexpected error. Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^}
+Traceback (most recent call last):
+  File "/Users/danugo/workspace/work/nexis/services/rag_api/main.py", line 405, in get_graph_visualization
+    result = session.run(query, expand_node_id=expand_node_id)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/work/session.py", line 320, in run
+    self._auto_result._run(
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/work/result.py", line 237, in _run
+    self._attach()
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/work/result.py", line 439, in _attach
+    self._connection.fetch_message()
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/io/_common.py", line 193, in inner
+    func(*args, **kwargs)
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/io/_bolt.py", line 867, in fetch_message
+    res = self._process_message(tag, fields)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/io/_bolt5.py", line 496, in _process_message
+    response.on_failure(summary_metadata or {})
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/io/_common.py", line 263, in on_failure
+    raise self._hydrate_error(metadata)
+neo4j.exceptions.CypherSyntaxError: {neo4j_code: Neo.ClientError.Statement.SyntaxError} {message: Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^} {gql_status: 50N42} {gql_status_description: error: general processing exception - unexpected error. Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^}
+INFO:     127.0.0.1:59388 - "GET /graph/visualize?limit=100&expand_node_id=4%3Ad34a3413-c64f-4c1b-9866-1dfa6feff61f%3A61&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+Graph visualization error: {neo4j_code: Neo.ClientError.Statement.SyntaxError} {message: Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^} {gql_status: 50N42} {gql_status_description: error: general processing exception - unexpected error. Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^}
+Traceback (most recent call last):
+  File "/Users/danugo/workspace/work/nexis/services/rag_api/main.py", line 405, in get_graph_visualization
+    result = session.run(query, expand_node_id=expand_node_id)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/work/session.py", line 320, in run
+    self._auto_result._run(
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/work/result.py", line 237, in _run
+    self._attach()
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/work/result.py", line 439, in _attach
+    self._connection.fetch_message()
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/io/_common.py", line 193, in inner
+    func(*args, **kwargs)
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/io/_bolt.py", line 867, in fetch_message
+    res = self._process_message(tag, fields)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/io/_bolt5.py", line 496, in _process_message
+    response.on_failure(summary_metadata or {})
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/io/_common.py", line 263, in on_failure
+    raise self._hydrate_error(metadata)
+neo4j.exceptions.CypherSyntaxError: {neo4j_code: Neo.ClientError.Statement.SyntaxError} {message: Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^} {gql_status: 50N42} {gql_status_description: error: general processing exception - unexpected error. Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^}
+INFO:     127.0.0.1:59396 - "GET /graph/visualize?limit=100&expand_node_id=4%3Ad34a3413-c64f-4c1b-9866-1dfa6feff61f%3A274&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+Graph visualization error: {neo4j_code: Neo.ClientError.Statement.SyntaxError} {message: Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^} {gql_status: 50N42} {gql_status_description: error: general processing exception - unexpected error. Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^}
+Traceback (most recent call last):
+  File "/Users/danugo/workspace/work/nexis/services/rag_api/main.py", line 405, in get_graph_visualization
+    result = session.run(query, expand_node_id=expand_node_id)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/work/session.py", line 320, in run
+    self._auto_result._run(
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/work/result.py", line 237, in _run
+    self._attach()
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/work/result.py", line 439, in _attach
+    self._connection.fetch_message()
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/io/_common.py", line 193, in inner
+    func(*args, **kwargs)
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/io/_bolt.py", line 867, in fetch_message
+    res = self._process_message(tag, fields)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/io/_bolt5.py", line 496, in _process_message
+    response.on_failure(summary_metadata or {})
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/neo4j/_sync/io/_common.py", line 263, in on_failure
+    raise self._hydrate_error(metadata)
+neo4j.exceptions.CypherSyntaxError: {neo4j_code: Neo.ClientError.Statement.SyntaxError} {message: Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^} {gql_status: 50N42} {gql_status_description: error: general processing exception - unexpected error. Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^}
+INFO:     127.0.0.1:59399 - "GET /graph/visualize?limit=100&expand_node_id=4%3Ad34a3413-c64f-4c1b-9866-1dfa6feff61f%3A1170&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62016 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62020 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62032 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62035 - "GET /documents HTTP/1.1" 200 OK

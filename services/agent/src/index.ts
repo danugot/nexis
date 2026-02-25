@@ -1,7 +1,13 @@
-import 'dotenv/config';
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+
+// Load .env from project root if not found locally
+const rootEnvPath = path.resolve(__dirname, '../../../.env');
+dotenv.config({ path: rootEnvPath });
+dotenv.config(); // Fallback to default
+
 import { GoogleGenerativeAI, FunctionDeclaration, SchemaType } from '@google/generative-ai';
 import * as fs from 'fs';
-import * as path from 'path';
 import * as readline from 'readline';
 import { checkConflict } from './skills/conflict-checker';
 import { withdrawSkill } from './skills/withdraw-skill';

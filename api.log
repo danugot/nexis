@@ -1,0 +1,52 @@
+INFO:     Will watch for changes in these directories: ['/Users/danugo/workspace/work/nexis']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [14716] using WatchFiles
+Traceback (most recent call last):
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/chromadb/api/base_http_client.py", line 132, in _raise_chroma_error
+    resp.raise_for_status()
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/httpx/_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Server error '502 Bad Gateway' for url 'http://localhost:8000/api/v2/auth/identity'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/502
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/chromadb/api/client.py", line 122, in get_user_identity
+    return self._server.get_user_identity()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/chromadb/telemetry/opentelemetry/__init__.py", line 150, in wrapper
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/chromadb/api/fastapi.py", line 225, in get_user_identity
+    return UserIdentity(**self._make_request("get", "/auth/identity"))
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/chromadb/api/fastapi.py", line 131, in _make_request
+    BaseHTTPClient._raise_chroma_error(response)
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/chromadb/api/base_http_client.py", line 137, in _raise_chroma_error
+    raise (Exception(resp.text))
+Exception
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/danugo/workspace/work/nexis/services/rag_api/main.py", line 75, in <module>
+    chroma_client = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/chromadb/__init__.py", line 309, in HttpClient
+    return ClientCreator(tenant=tenant, database=database, settings=settings)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/chromadb/api/client.py", line 75, in __init__
+    user_identity = self.get_user_identity()
+                    ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/danugo/workspace/work/nexis/.venv/lib/python3.11/site-packages/chromadb/api/client.py", line 131, in get_user_identity
+    raise ValueError(str(e))
+ValueError
+INFO:     Started server process [14758]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [14758]
+INFO:     Stopping reloader process [14716]

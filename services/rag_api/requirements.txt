@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+chromadb
+neo4j
+python-dotenv
+python-multipart
+google-generativeai
+redis
