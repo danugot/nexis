@@ -3,7 +3,10 @@
 > vite -- --port 5173 --strictPort
 
 
-  VITE v7.3.1  ready in 109 ms
+  VITE v7.3.1  ready in 92 ms
 
   ➜  Local:   http://localhost:5173/
-  ➜  Network: use --host to expose
+  ➜  Network: http://100.102.54.63:5173/
+  ➜  Network: http://192.168.5.121:5173/
+  ➜  Network: http://100.67.81.84:5173/
+  ➜  Network: http://198.18.0.1:5173/

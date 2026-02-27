@@ -49,6 +49,7 @@ model Document {
   jiraId        String?
   status        String   @default("QUEUED") // QUEUED, PROCESSING, EFFECTIVE, NEEDS_REVIEW, ARCHIVED
   error_message String?
+  projectName   String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

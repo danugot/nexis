@@ -3,133 +3,117 @@ RAG Server connected to ChromaDB at localhost:8000
 RAG Server connected to Neo4j at bolt://localhost:7687
 RAG API connecting to Redis at localhost:6380
 RAG Server connected to Gemini API
-INFO:     Started server process [72764]
+INFO:     Started server process [73686]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
-INFO:     127.0.0.1:49561 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49565 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49562 - "GET /domains HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49575 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53230 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53229 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53237 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53242 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53232 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53245 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53248 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53630 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53629 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53633 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53635 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53631 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53637 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53640 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55707 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55706 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55710 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55712 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55708 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55714 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55717 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55721 - "GET /documents HTTP/1.1" 200 OK
 Building prefix dict from the default dictionary ...
 Loading model from cache /var/folders/fl/8n6sppwn3p39jd875rvvrxz40000gn/T/jieba.cache
-Loading model cost 0.201 seconds.
+Loading model cost 0.193 seconds.
 Prefix dict has been built successfully.
-Graph query for '银票' found 18 facts.
-Graph query for '业务' found 24 facts.
-Graph query for '流程' found 3 facts.
-Graph query for '规则' found 8 facts.
-Graph query for '资方' found 7 facts.
-Graph query for '垫付' found 0 facts.
-INFO:     127.0.0.1:49612 - "POST /retrieve HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49618 - "GET /api/settings HTTP/1.1" 404 Not Found
-Graph query for '银票' found 18 facts.
-Graph query for '业务' found 24 facts.
-Graph query for '资方' found 7 facts.
-Graph query for '垫付' found 0 facts.
+Graph query for '票据' found 25 facts.
+Graph query for '融合' found 1 facts.
+Graph query for '一期' found 1 facts.
+Graph query for '询价' found 25 facts.
+Graph query for '调整' found 0 facts.
+Graph query for '内容' found 1 facts.
+INFO:     127.0.0.1:55786 - "POST /retrieve HTTP/1.1" 200 OK
+Graph query for '票据' found 25 facts.
+Graph query for '融合' found 1 facts.
+Graph query for '一期' found 1 facts.
+Graph query for '询价' found 25 facts.
+Graph query for '调整' found 0 facts.
+Graph query for '规则' found 5 facts.
+Graph query for '精准' found 6 facts.
+Graph query for '询价' found 25 facts.
+Graph query for '登录' found 23 facts.
+Graph query for '询价' found 25 facts.
+Graph query for '登录' found 23 facts.
+Graph query for '询价' found 25 facts.
+INFO:     127.0.0.1:55786 - "POST /retrieve HTTP/1.1" 200 OK
+Graph query for '需求' found 0 facts.
+Graph query for '文档' found 0 facts.
+Graph query for '票据' found 25 facts.
+Graph query for '融合' found 1 facts.
+Graph query for '一期' found 1 facts.
+Graph query for '询价' found 25 facts.
 Graph query for '融资' found 25 facts.
-Graph query for '方案' found 24 facts.
-Graph query for '贴现' found 24 facts.
-Graph query for '流程' found 3 facts.
-Graph query for '第三方' found 1 facts.
-Graph query for '机构' found 25 facts.
-Graph query for '资金' found 7 facts.
-Graph query for '清算' found 10 facts.
-INFO:     127.0.0.1:49620 - "POST /retrieve HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49643 - "GET /api/settings HTTP/1.1" 404 Not Found
-INFO:     127.0.0.1:49768 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49771 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49769 - "GET /domains HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49774 - "GET /domains HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49785 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49786 - "GET /domains HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49789 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49791 - "GET /domains HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50120 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50124 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50121 - "GET /domains HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50126 - "GET /domains HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50538 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50543 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50539 - "GET /domains HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50549 - "GET /domains HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50927 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50931 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50928 - "GET /domains HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50933 - "GET /domains HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50956 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50957 - "GET /domains HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50959 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50964 - "GET /domains HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51450 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51455 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51451 - "GET /domains HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51457 - "GET /domains HTTP/1.1" 200 OK
-Graph query for '提示' found 24 facts.
-Graph query for '收票' found 25 facts.
-Graph query for '承兑' found 24 facts.
-Graph query for '签收' found 25 facts.
-Graph query for '业务' found 24 facts.
-Graph query for '规则' found 8 facts.
-INFO:     127.0.0.1:51524 - "POST /retrieve HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51527 - "GET /api/settings HTTP/1.1" 404 Not Found
-Graph query for '提示' found 24 facts.
-Graph query for '收票' found 25 facts.
-Graph query for '承兑' found 24 facts.
-Graph query for '签收' found 25 facts.
-Graph query for '业务流程' found 0 facts.
-Graph query for '状态' found 22 facts.
-Graph query for '流转' found 9 facts.
-INFO:     127.0.0.1:51529 - "POST /retrieve HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51643 - "GET /api/settings HTTP/1.1" 404 Not Found
-Graph query for '出票' found 24 facts.
-Graph query for '登记' found 13 facts.
-Graph query for '提示' found 24 facts.
-Graph query for '承兑' found 24 facts.
-Graph query for '提示' found 24 facts.
-Graph query for '收票' found 25 facts.
-Graph query for '一键' found 0 facts.
-Graph query for '发起' found 3 facts.
-Graph query for '自动化' found 0 facts.
-Graph query for '流程' found 3 facts.
-Graph query for '状态机' found 0 facts.
-Graph query for '承兑' found 24 facts.
-Graph query for '签收' found 25 facts.
-INFO:     127.0.0.1:51645 - "POST /retrieve HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51668 - "GET /api/settings HTTP/1.1" 404 Not Found
-Graph query for '提示' found 24 facts.
-Graph query for '承兑' found 24 facts.
-Graph query for '前置条件' found 0 facts.
-Graph query for '业务' found 24 facts.
-Graph query for '规则' found 8 facts.
-INFO:     127.0.0.1:51711 - "POST /retrieve HTTP/1.1" 200 OK
-Graph query for '提示' found 24 facts.
-Graph query for '承兑' found 24 facts.
-Graph query for '发起' found 3 facts.
-Graph query for '前置条件' found 0 facts.
-Graph query for '票据' found 24 facts.
-Graph query for '状态' found 22 facts.
-Graph query for '校验' found 10 facts.
-Graph query for '规则' found 8 facts.
-INFO:     127.0.0.1:51711 - "POST /retrieve HTTP/1.1" 200 OK
-Graph query for '提示' found 24 facts.
-Graph query for '承兑' found 24 facts.
-Graph query for '前置' found 0 facts.
-Graph query for '校验' found 10 facts.
-Graph query for '票据' found 24 facts.
-Graph query for '状态' found 22 facts.
-INFO:     127.0.0.1:51711 - "POST /retrieve HTTP/1.1" 200 OK
-Graph query for '提示' found 24 facts.
-Graph query for '承兑' found 24 facts.
-Graph query for '业务流程' found 0 facts.
-Graph query for '校验' found 10 facts.
-Graph query for '规则' found 8 facts.
-Graph query for '票据' found 24 facts.
-Graph query for '状态' found 22 facts.
-Graph query for '成功' found 8 facts.
-Graph query for '登记' found 13 facts.
-INFO:     127.0.0.1:51711 - "POST /retrieve HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51957 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51961 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51958 - "GET /domains HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51963 - "GET /domains HTTP/1.1" 200 OK
+Graph query for '20250916V1.1' found 0 facts.
+Graph query for 'docx' found 0 facts.
+Graph query for '询价' found 25 facts.
+Graph query for '调整' found 0 facts.
+Graph query for '内容' found 1 facts.
+Graph query for '业务' found 25 facts.
+Graph query for '规则' found 5 facts.
+INFO:     127.0.0.1:55786 - "POST /retrieve HTTP/1.1" 200 OK
+Graph query for '精准' found 6 facts.
+Graph query for '询价' found 25 facts.
+Graph query for '规则' found 5 facts.
+Graph query for '描述' found 0 facts.
+Graph query for '票据' found 25 facts.
+Graph query for '融合' found 1 facts.
+Graph query for '一期' found 1 facts.
+INFO:     127.0.0.1:55786 - "POST /retrieve HTTP/1.1" 200 OK
+Graph query for '票据' found 25 facts.
+Graph query for '融合' found 1 facts.
+Graph query for '一期' found 1 facts.
+Graph query for '询价' found 25 facts.
+Graph query for '调整' found 0 facts.
+Graph query for '登录' found 23 facts.
+Graph query for '询价' found 25 facts.
+Graph query for '逻辑' found 9 facts.
+Graph query for '登录' found 23 facts.
+Graph query for '询价' found 25 facts.
+Graph query for '逻辑' found 9 facts.
+Graph query for '精准' found 6 facts.
+Graph query for '询价' found 25 facts.
+Graph query for '逻辑' found 9 facts.
+INFO:     127.0.0.1:55786 - "POST /retrieve HTTP/1.1" 200 OK
+Graph query for '需求' found 0 facts.
+Graph query for '文档' found 0 facts.
+Graph query for '票据' found 25 facts.
+Graph query for '融合' found 1 facts.
+Graph query for '一期' found 1 facts.
+Graph query for '询价' found 25 facts.
+Graph query for '融资' found 25 facts.
+Graph query for '20250916V1.1' found 0 facts.
+Graph query for 'docx' found 0 facts.
+Graph query for '修订' found 0 facts.
+Graph query for '记录' found 16 facts.
+Graph query for '变更' found 0 facts.
+Graph query for '内容' found 1 facts.
+Graph query for '询价' found 25 facts.
+Graph query for '调整' found 0 facts.
+INFO:     127.0.0.1:55786 - "POST /retrieve HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55883 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55886 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55884 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55891 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55904 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/taxonomy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55905 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/suggestions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55914 - "GET /domains/f2bace5a-1c81-4f01-8236-937e54866e90/taxonomy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55915 - "GET /domains/f2bace5a-1c81-4f01-8236-937e54866e90/suggestions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55920 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/taxonomy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55921 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/suggestions HTTP/1.1" 200 OK

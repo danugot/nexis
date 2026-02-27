@@ -169,6 +169,45 @@ app.post('/api/analyze-conflict', async (req, res) => {
     }
 });
 
+// --- Project Endpoints ---
+app.get('/projects', async (req, res) => {
+    try {
+        const { query, domainId } = req.query;
+        let whereClause: any = {
+            status: 'EFFECTIVE',
+            projectName: { not: null }
+        };
+
+        if (domainId) {
+            whereClause.domainId = String(domainId);
+        }
+
+        if (query) {
+            whereClause.projectName = { contains: String(query), mode: 'insensitive' };
+        }
+
+        // Find unique project names from Effective documents
+        const docs = await prisma.document.findMany({
+            where: whereClause,
+            select: { projectName: true },
+            distinct: ['projectName'],
+            orderBy: { projectName: 'asc' },
+            take: 10
+        });
+
+        const projects = docs
+            .filter(d => Boolean(d.projectName) && String(d.projectName).trim() !== "")
+            .map((d, idx) => ({
+                id: `proj-${idx}`,
+                name: d.projectName
+            }));
+
+        res.json(projects);
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // --- Session Management Endpoints ---
 
 // Get all sessions

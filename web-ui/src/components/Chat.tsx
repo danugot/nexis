@@ -13,6 +13,9 @@ export default function Chat() {
     const [loading, setLoading] = useState(false)
     const [sessions, setSessions] = useState<any[]>([])
     const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
+    const [projectSuggestions, setProjectSuggestions] = useState<any[]>([])
+    const [showSuggestions, setShowSuggestions] = useState(false)
+    const [suggestionsLoading, setSuggestionsLoading] = useState(false)
     const messagesEndRef = useRef<HTMLDivElement>(null)
 
     // Ensure we are talking to the Agent API
@@ -93,6 +96,40 @@ export default function Chat() {
         } catch (e) {
             console.error("Failed to delete session", e)
         }
+    }
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        setInput(val);
+
+        const match = val.match(/@(\S*)$/);
+        if (match) {
+            setShowSuggestions(true);
+            fetchProjectSuggestions(match[1]);
+        } else {
+            setShowSuggestions(false);
+        }
+    }
+
+    const fetchProjectSuggestions = async (query: string) => {
+        setSuggestionsLoading(true);
+        try {
+            const url = new URL(`${agentUrl}/projects`, window.location.origin);
+            if (query) url.searchParams.append('query', query);
+            const res = await fetch(url.toString());
+            const data = await res.json();
+            setProjectSuggestions(data);
+        } catch (e) {
+            console.error("Failed to fetch project suggestions", e);
+        } finally {
+            setSuggestionsLoading(false);
+        }
+    }
+
+    const selectProject = (projectName: string) => {
+        const newVal = input.replace(/@(\S*)$/, `@${projectName} `);
+        setInput(newVal);
+        setShowSuggestions(false);
     }
 
     const sendMessage = async () => {
@@ -308,7 +345,27 @@ export default function Chat() {
                     </CardContent>
                 </Card>
 
-                <div className="p-4 bg-background lg:px-12 pb-8 border-t">
+                <div className="p-4 bg-background lg:px-12 pb-8 border-t relative">
+                    {showSuggestions && (
+                        <div className="absolute bottom-full left-4 lg:left-12 mb-2 w-64 bg-popover text-popover-foreground border bg-white dark:bg-zinc-950 rounded-md shadow-lg overflow-hidden z-50">
+                            {suggestionsLoading ? (
+                                <div className="p-3 text-sm text-muted-foreground animate-pulse">Loading...</div>
+                            ) : projectSuggestions.length > 0 ? (
+                                <ul className="max-h-48 overflow-y-auto py-1">
+                                    {projectSuggestions.map(p => (
+                                        <li key={p.id}
+                                            className="px-3 py-2 text-sm hover:bg-muted cursor-pointer"
+                                            onClick={() => selectProject(p.name)}
+                                        >
+                                            {p.name}
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <div className="p-3 text-sm text-muted-foreground">No projects found.</div>
+                            )}
+                        </div>
+                    )}
                     <form
                         onSubmit={(e) => {
                             e.preventDefault()
@@ -318,7 +375,7 @@ export default function Chat() {
                     >
                         <Input
                             value={input}
-                            onChange={(e) => setInput(e.target.value)}
+                            onChange={handleInputChange}
                             placeholder="Ask me anything..."
                             className="flex-1 shadow-sm"
                             disabled={loading || !currentSessionId}
