@@ -7,8 +7,8 @@ cd "$(dirname "$0")"
 export PYTHONPATH=$(pwd)
 
 function start_all() {
-    echo "Starting Infrastructure (Redis, Chroma, Neo4j)..."
-    docker-compose up -d redis chroma neo4j
+    echo "Starting Infrastructure (Redis, Chroma, Neo4j, Postgres)..."
+    docker-compose up -d redis chroma neo4j postgres
     sleep 3
 
     echo "Starting Python Services (RAG API and Worker)..."

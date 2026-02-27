@@ -20,6 +20,8 @@ import { getTaxonomyDeclaration, getTaxonomy } from './skills/ingest-get-taxonom
 import { proposeNewCategoryDeclaration, proposeNewCategory } from './skills/ingest-propose-category';
 import { writeSubgraphDeclaration, writeSubgraph } from './skills/ingest-write-subgraph';
 import { reviewTaxonomyQueueDeclaration, reviewTaxonomyQueue } from './skills/review-taxonomy-queue';
+import { simulateImpactDeclaration, simulateImpact } from './skills/simulate-impact';
+import { draftPrdDeclaration, draftPrd } from './skills/draft-prd';
 import { prisma } from './db';
 
 // --- Configuration ---
@@ -137,7 +139,10 @@ const tools: FunctionDeclaration[] = [
     proposeNewCategoryDeclaration,
     writeSubgraphDeclaration,
     // --- Admin Chat Tools ---
-    reviewTaxonomyQueueDeclaration
+    reviewTaxonomyQueueDeclaration,
+    // --- Copilot Pipeline Tools ---
+    simulateImpactDeclaration,
+    draftPrdDeclaration
 ];
 
 // --- Express Server ---
@@ -300,7 +305,10 @@ app.post('/chat', async (req, res) => {
 4. NEVER say "Project X (即 Project Y)" or "Project X is Project Y". They are DIFFERENT THINGS unless explicitly and factually stated in the text.
 
 **Semantic Retrieval Rule (CRITICAL)**:
-When formulating the \`query\` argument for \`retrieve_knowledge\`, DO NOT over-abstract. If the user's prompt contains specific, highly-contextual nouns or features (e.g. '导流路径', '审批流', '回帖路径'), you MUST include those EXACT terms in your query string. Searching for generic terms like "新增功能" will fail to retrieve highly-specific vector chunks.`;
+When formulating the \`query\` argument for \`retrieve_knowledge\`, DO NOT over-abstract. If the user's prompt contains specific, highly-contextual nouns or features (e.g. '导流路径', '审批流', '回帖路径'), you MUST include those EXACT terms in your query string. Searching for generic terms like "新增功能" will fail to retrieve highly-specific vector chunks.
+
+**Proactive Copilot Rule (CRITICAL)**:
+If the user is PROPOSING a new feature or ASKING for a DRAFT PRD based on a new idea, you MUST immediately call \`simulate_impact\` first. Once that returns the Feasibility Impact Report, if they asked for a PRD, you MUST call \`draft_prd\` next. You are acting as an active Business Architect.`;
 
         let finalText = "";
         const executedTools = [];
@@ -372,6 +380,10 @@ When formulating the \`query\` argument for \`retrieve_knowledge\`, DO NOT over-
                             toolResult = { content: loadKnowledge() };
                         } else if (name === "review_taxonomy_queue") {
                             toolResult = await reviewTaxonomyQueue(args, domainId);
+                        } else if (name === "simulate_impact") {
+                            toolResult = await simulateImpact({ ...args, projectName });
+                        } else if (name === "draft_prd") {
+                            toolResult = await draftPrd(args);
                         } else {
                             toolResult = { error: `Unknown tool: ${name}` };
                         }
@@ -454,6 +466,10 @@ When formulating the \`query\` argument for \`retrieve_knowledge\`, DO NOT over-
                             toolResult = { content: loadKnowledge() };
                         } else if (name === "review_taxonomy_queue") {
                             toolResult = await reviewTaxonomyQueue(args, domainId);
+                        } else if (name === "simulate_impact") {
+                            toolResult = await simulateImpact({ ...args, projectName });
+                        } else if (name === "draft_prd") {
+                            toolResult = await draftPrd(args);
                         } else {
                             toolResult = { error: `Unknown tool: ${name}` };
                         }

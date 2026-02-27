@@ -262,11 +262,34 @@ export default function Chat() {
                                             <div className="text-xs font-semibold text-blue-500/80 flex items-center gap-1">
                                                 <span className="flex-shrink-0 animate-pulse">⚡</span> Thinking Process
                                             </div>
-                                            {m.tools.map((t: any, idx: number) => (
-                                                <div key={idx} className="text-[11px] text-muted-foreground bg-background/50 p-1 rounded font-mono">
-                                                    <span className="text-purple-500/80">Call:</span> {t.name}(<span className="text-green-600/70">{JSON.stringify(t.args)}</span>)
-                                                </div>
-                                            ))}
+                                            {m.tools.map((t: any, idx: number) => {
+                                                if (t.name === 'simulate_impact') {
+                                                    return (
+                                                        <div key={idx} className="mt-2 mb-2 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-md shadow-sm">
+                                                            <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-medium text-sm">
+                                                                <span className="animate-spin text-lg">⚙️</span> 架构沙盘推演中...
+                                                            </div>
+                                                            <div className="text-xs text-indigo-500/80 mt-1 ml-7">
+                                                                自动分析范围: {t.args?.search_keywords || "提取中..."}
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                }
+                                                if (t.name === 'draft_prd') {
+                                                    return (
+                                                        <div key={idx} className="mt-2 mb-2 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-md shadow-sm">
+                                                            <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-medium text-sm">
+                                                                <span className="animate-pulse text-lg">📝</span> 架构评估通过，正在生成标准化 PRD 文档...
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                }
+                                                return (
+                                                    <div key={idx} className="text-[11px] text-muted-foreground bg-background/50 p-1 rounded font-mono">
+                                                        <span className="text-purple-500/80">Call:</span> {t.name}(<span className="text-green-600/70">{JSON.stringify(t.args)}</span>)
+                                                    </div>
+                                                )
+                                            })}
                                         </div>
                                     )}
 
