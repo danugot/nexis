@@ -15,3 +15,87 @@ INFO:     127.0.0.1:56067 - "GET /domains/f2bace5a-1c81-4f01-8236-937e54866e90/s
 INFO:     127.0.0.1:56068 - "GET /domains/f2bace5a-1c81-4f01-8236-937e54866e90/taxonomy HTTP/1.1" 200 OK
 INFO:     127.0.0.1:56079 - "GET /domains HTTP/1.1" 200 OK
 INFO:     127.0.0.1:56098 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56236 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56239 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56237 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56241 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56244 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/taxonomy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56245 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/suggestions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56250 - "GET /domains/f2bace5a-1c81-4f01-8236-937e54866e90/taxonomy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56251 - "GET /domains/f2bace5a-1c81-4f01-8236-937e54866e90/suggestions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56256 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/taxonomy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56257 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/suggestions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56260 - "GET /graph/visualize?limit=500&domain_id=29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56264 - "GET /graph/visualize?limit=500&domain_id=29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56267 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56270 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56275 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/taxonomy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56276 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/suggestions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56433 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56435 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56432 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56439 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56478 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56481 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56499 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56500 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56504 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56505 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56608 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56612 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56609 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56614 - "GET /domains HTTP/1.1" 200 OK
+Building prefix dict from the default dictionary ...
+Loading model from cache /var/folders/fl/8n6sppwn3p39jd875rvvrxz40000gn/T/jieba.cache
+Loading model cost 0.194 seconds.
+Prefix dict has been built successfully.
+Graph query for '供票' found 10 facts.
+Graph query for '银行' found 22 facts.
+Graph query for '账户' found 24 facts.
+Graph query for '支持' found 2 facts.
+Graph query for '种类' found 8 facts.
+INFO:     127.0.0.1:56641 - "POST /retrieve HTTP/1.1" 200 OK
+Graph query for '供票' found 10 facts.
+Graph query for '支持' found 2 facts.
+Graph query for '银行' found 22 facts.
+Graph query for '列表' found 8 facts.
+INFO:     127.0.0.1:56641 - "POST /retrieve HTTP/1.1" 200 OK
+Graph query for '供票' found 10 facts.
+Graph query for '支持' found 2 facts.
+Graph query for '银行' found 22 facts.
+Graph query for '账户' found 24 facts.
+Graph query for '账户' found 24 facts.
+Graph query for '类型' found 10 facts.
+Graph query for '银行' found 22 facts.
+Graph query for '列表' found 8 facts.
+INFO:     127.0.0.1:56641 - "POST /retrieve HTTP/1.1" 200 OK
+Graph query for '供应链' found 9 facts.
+Graph query for '票据' found 24 facts.
+Graph query for '供票' found 10 facts.
+Graph query for '支持' found 2 facts.
+Graph query for '银行' found 22 facts.
+Graph query for '账户' found 24 facts.
+Graph query for '类型' found 10 facts.
+Graph query for '结算' found 4 facts.
+Graph query for '账户' found 24 facts.
+INFO:     127.0.0.1:56641 - "POST /retrieve HTTP/1.1" 200 OK
+Graph query for '供票' found 10 facts.
+Graph query for '结算' found 4 facts.
+Graph query for '账户' found 24 facts.
+Graph query for '要求' found 0 facts.
+Graph query for '支持' found 2 facts.
+Graph query for '银行' found 22 facts.
+Graph query for '列表' found 8 facts.
+INFO:     127.0.0.1:56641 - "POST /retrieve HTTP/1.1" 200 OK
+Graph query for '供票' found 10 facts.
+Graph query for '平台' found 7 facts.
+Graph query for '支持' found 2 facts.
+Graph query for '银行' found 22 facts.
+Graph query for '账户' found 24 facts.
+Graph query for '绑定' found 1 facts.
+Graph query for '规则' found 8 facts.
+INFO:     127.0.0.1:56641 - "POST /retrieve HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56798 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56802 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56799 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56804 - "GET /domains HTTP/1.1" 200 OK
