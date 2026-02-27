@@ -94,6 +94,7 @@ export default function KnowledgeBase() {
         const formData = new FormData();
         formData.append('file', data.file[0]);
         if (activeDomain) formData.append('domainId', activeDomain.id);
+        if (data.projectName) formData.append('projectName', data.projectName);
         if (data.jiraId) formData.append('jiraId', data.jiraId);
         if (data.version) formData.append('version', data.version);
 
@@ -221,6 +222,11 @@ export default function KnowledgeBase() {
                                     <div className="space-y-2">
                                         <Label htmlFor="jiraId">JIRA ID (Optional)</Label>
                                         <Input id="jiraId" placeholder="e.g. NEXIS-101" {...register('jiraId')} />
+                                    </div>
+                                    <div className="space-y-2 col-span-2">
+                                        <Label htmlFor="projectName">Project Name / Alias (MANDATORY IF SPECIFIC)</Label>
+                                        <Input id="projectName" placeholder="e.g. 票据融合一期" {...register('projectName')} />
+                                        <p className="text-[10px] text-muted-foreground mt-1">If set, AI will securely isolate and retrieve facts for this exact project name.</p>
                                     </div>
                                 </div>
                                 <div className="space-y-2">

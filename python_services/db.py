@@ -41,6 +41,7 @@ class Document(Base):
     id = Column(String, primary_key=True)
     filename = Column(String, nullable=False)
     version = Column(String, default="v1.0")
+    projectName = Column(String, nullable=True)
     domainId = Column(String, ForeignKey("Domain.id", ondelete="SET NULL"), nullable=True)
     jiraId = Column(String, nullable=True)
     # QUEUED, PROCESSING, EFFECTIVE, NEEDS_REVIEW, ARCHIVED
@@ -50,6 +51,16 @@ class Document(Base):
     updatedAt = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
     
     domain = relationship("Domain", back_populates="documents")
+
+class TaxonomySuggestion(Base):
+    __tablename__ = "TaxonomySuggestion"
+    
+    id = Column(String, primary_key=True)
+    domainId = Column(String, nullable=False)
+    proposedPath = Column(String, nullable=False)
+    reasoning = Column(String, nullable=False)
+    status = Column(String, default="PENDING")
+    createdAt = Column(DateTime, default=datetime.datetime.utcnow)
 
 def get_db():
     db = SessionLocal()

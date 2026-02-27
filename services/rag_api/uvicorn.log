@@ -1,0 +1,293 @@
+INFO:     Will watch for changes in these directories: ['/Users/danugo/workspace/work/nexis/services/rag_api']
+INFO:     Uvicorn running on http://127.0.0.1:8001 (Press CTRL+C to quit)
+INFO:     Started reloader process [24392] using WatchFiles
+/Users/danugo/workspace/work/nexis/python_services/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+/Users/danugo/workspace/work/nexis/python_services/venv/lib/python3.9/site-packages/google/auth/__init__.py:54: FutureWarning: You are using a Python version 3.9 past its end of life. Google will update google-auth with critical bug fixes on a best-effort basis, but not with any other fixes or features. Please upgrade your Python version, and then update google-auth.
+  warnings.warn(eol_message.format("3.9"), FutureWarning)
+/Users/danugo/workspace/work/nexis/python_services/venv/lib/python3.9/site-packages/google/oauth2/__init__.py:40: FutureWarning: You are using a Python version 3.9 past its end of life. Google will update google-auth with critical bug fixes on a best-effort basis, but not with any other fixes or features. Please upgrade your Python version, and then update google-auth.
+  warnings.warn(eol_message.format("3.9"), FutureWarning)
+INFO:     Started server process [24395]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+RAG Server connected to Redis at localhost:6380
+RAG Server connected to ChromaDB at localhost:8000
+RAG Server connected to Neo4j at bolt://localhost:7687
+RAG API connecting to Redis at localhost:6380
+RAG Server connected to Gemini API
+INFO:     127.0.0.1:64293 - "DELETE /domains/a2d174da-ef56-47be-94d3-f20132bd0d23 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64703 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64707 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64704 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64709 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64717 - "GET /domains/f2bace5a-1c81-4f01-8236-937e54866e90/taxonomy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64718 - "GET /domains/f2bace5a-1c81-4f01-8236-937e54866e90/suggestions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64732 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/taxonomy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64733 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/suggestions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64741 - "GET /domains/f3ded612-8402-4c7b-bd69-8fb8c151a4cf/taxonomy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64742 - "GET /domains/f3ded612-8402-4c7b-bd69-8fb8c151a4cf/suggestions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64745 - "DELETE /domains/f3ded612-8402-4c7b-bd69-8fb8c151a4cf HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64748 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64753 - "GET /domains/f2bace5a-1c81-4f01-8236-937e54866e90/taxonomy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64754 - "GET /domains/f2bace5a-1c81-4f01-8236-937e54866e90/suggestions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64760 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/suggestions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64759 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/taxonomy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64766 - "GET /domains/f2bace5a-1c81-4f01-8236-937e54866e90/suggestions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64765 - "GET /domains/f2bace5a-1c81-4f01-8236-937e54866e90/taxonomy HTTP/1.1" 200 OK
+Graph query for '出票流程' found 0 facts.
+INFO:     127.0.0.1:64813 - "POST /retrieve HTTP/1.1" 200 OK
+Graph query for '购票' found 0 facts.
+INFO:     127.0.0.1:64813 - "POST /retrieve HTTP/1.1" 200 OK
+Graph query for '*' found 0 facts.
+INFO:     127.0.0.1:64829 - "POST /retrieve HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64835 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/suggestions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64851 - "GET /graph/visualize?limit=500&domain_id=29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64854 - "GET /graph/visualize?limit=500&domain_id=29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64857 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64860 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64866 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/suggestions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64865 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/taxonomy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64872 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64875 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64878 - "GET /graph/visualize?limit=500&domain_id=29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64881 - "GET /graph/visualize?limit=500&domain_id=29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64904 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64907 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64913 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64916 - "GET /graph/visualize?limit=500&domain_id=f2bace5a-1c81-4f01-8236-937e54866e90&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64919 - "GET /graph/visualize?limit=500&domain_id=f2bace5a-1c81-4f01-8236-937e54866e90&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64922 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64925 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64931 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64942 - "POST /upload HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64945 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64963 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64962 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64966 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64968 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64964 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64970 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64973 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64979 - "GET /graph/visualize?limit=500&domain_id=f2bace5a-1c81-4f01-8236-937e54866e90&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64982 - "GET /graph/visualize?limit=500&domain_id=f2bace5a-1c81-4f01-8236-937e54866e90&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64985 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64988 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64991 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64994 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64998 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65001 - "GET /documents/20220421-%E6%96%B0%E4%B8%80%E4%BB%A3%E7%A5%A8%E6%8D%AE%E4%B8%80%E6%9C%9F.docx/trace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65015 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65018 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65021 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65034 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65037 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65040 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65043 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65046 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65069 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65136 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49240 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49571 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49585 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49585 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49585 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49600 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49604 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49609 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49609 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49609 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49652 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49652 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49652 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49652 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49652 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49652 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49679 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49682 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49689 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49691 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49689 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49691 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49689 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49691 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49689 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49691 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49689 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49691 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49689 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49691 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49689 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49691 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49689 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49691 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49689 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49691 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49689 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49691 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49689 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49691 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49689 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49691 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49689 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49691 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49689 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49691 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49689 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49691 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49689 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49691 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49689 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49691 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49689 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49705 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49705 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49705 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49705 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49705 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49705 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49705 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49725 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49737 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49751 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49757 - "GET /documents/20220421-%E6%96%B0%E4%B8%80%E4%BB%A3%E7%A5%A8%E6%8D%AE%E4%B8%80%E6%9C%9F.docx/trace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49762 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49764 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49776 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49819 - "GET /graph/visualize?limit=500&domain_id=29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49843 - "GET /graph/visualize?limit=500&domain_id=29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49854 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49854 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+Traceback (most recent call last):
+  File "/Users/danugo/workspace/work/nexis/services/rag_api/main.py", line 594, in get_graph_visualization
+    result = session.run(query, expand_node_id=expand_node_id)
+  File "/Users/danugo/workspace/work/nexis/python_services/venv/lib/python3.9/site-packages/neo4j/_sync/work/session.py", line 330, in run
+    self._auto_result._run(
+  File "/Users/danugo/workspace/work/nexis/python_services/venv/lib/python3.9/site-packages/neo4j/_sync/work/result.py", line 236, in _run
+    self._attach()
+  File "/Users/danugo/workspace/work/nexis/python_services/venv/lib/python3.9/site-packages/neo4j/_sync/work/result.py", line 430, in _attach
+    self._connection.fetch_message()
+  File "/Users/danugo/workspace/work/nexis/python_services/venv/lib/python3.9/site-packages/neo4j/_sync/io/_common.py", line 193, in inner
+    func(*args, **kwargs)
+  File "/Users/danugo/workspace/work/nexis/python_services/venv/lib/python3.9/site-packages/neo4j/_sync/io/_bolt.py", line 863, in fetch_message
+    res = self._process_message(tag, fields)
+  File "/Users/danugo/workspace/work/nexis/python_services/venv/lib/python3.9/site-packages/neo4j/_sync/io/_bolt5.py", line 500, in _process_message
+    response.on_failure(summary_metadata or {})
+  File "/Users/danugo/workspace/work/nexis/python_services/venv/lib/python3.9/site-packages/neo4j/_sync/io/_common.py", line 263, in on_failure
+    raise self._hydrate_error(metadata)
+neo4j.exceptions.CypherSyntaxError: {code: Neo.ClientError.Statement.SyntaxError} {message: Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^}
+Graph visualization error: {code: Neo.ClientError.Statement.SyntaxError} {message: Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^}
+INFO:     127.0.0.1:49890 - "GET /graph/visualize?limit=100&expand_node_id=4%3Ad34a3413-c64f-4c1b-9866-1dfa6feff61f%3A1&domain_id=29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+Traceback (most recent call last):
+  File "/Users/danugo/workspace/work/nexis/services/rag_api/main.py", line 594, in get_graph_visualization
+    result = session.run(query, expand_node_id=expand_node_id)
+  File "/Users/danugo/workspace/work/nexis/python_services/venv/lib/python3.9/site-packages/neo4j/_sync/work/session.py", line 330, in run
+    self._auto_result._run(
+  File "/Users/danugo/workspace/work/nexis/python_services/venv/lib/python3.9/site-packages/neo4j/_sync/work/result.py", line 236, in _run
+    self._attach()
+  File "/Users/danugo/workspace/work/nexis/python_services/venv/lib/python3.9/site-packages/neo4j/_sync/work/result.py", line 430, in _attach
+    self._connection.fetch_message()
+  File "/Users/danugo/workspace/work/nexis/python_services/venv/lib/python3.9/site-packages/neo4j/_sync/io/_common.py", line 193, in inner
+    func(*args, **kwargs)
+  File "/Users/danugo/workspace/work/nexis/python_services/venv/lib/python3.9/site-packages/neo4j/_sync/io/_bolt.py", line 863, in fetch_message
+    res = self._process_message(tag, fields)
+  File "/Users/danugo/workspace/work/nexis/python_services/venv/lib/python3.9/site-packages/neo4j/_sync/io/_bolt5.py", line 500, in _process_message
+    response.on_failure(summary_metadata or {})
+  File "/Users/danugo/workspace/work/nexis/python_services/venv/lib/python3.9/site-packages/neo4j/_sync/io/_common.py", line 263, in on_failure
+    raise self._hydrate_error(metadata)
+neo4j.exceptions.CypherSyntaxError: {code: Neo.ClientError.Statement.SyntaxError} {message: Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^}
+Graph visualization error: {code: Neo.ClientError.Statement.SyntaxError} {message: Unknown function 'str' (line 3, column 81 (offset: 91))
+"                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id"
+                                                             ^}
+INFO:     127.0.0.1:49896 - "GET /graph/visualize?limit=100&expand_node_id=4%3Ad34a3413-c64f-4c1b-9866-1dfa6feff61f%3A2&domain_id=29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49899 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49902 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49905 - "GET /documents/20220421-%E6%96%B0%E4%B8%80%E4%BB%A3%E7%A5%A8%E6%8D%AE%E4%B8%80%E6%9C%9F.docx/trace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49911 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49928 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/suggestions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49927 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/taxonomy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49930 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49935 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49938 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49941 - "GET /graph/visualize?limit=500&domain_id=29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49944 - "GET /graph/visualize?limit=500&domain_id=29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49930 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49930 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49930 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49948 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49951 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49930 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49955 - "GET /documents/20220421-%E6%96%B0%E4%B8%80%E4%BB%A3%E7%A5%A8%E6%8D%AE%E4%B8%80%E6%9C%9F.docx/trace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49967 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49967 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49967 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49976 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49976 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50008 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50008 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50008 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50020 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50020 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50029 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50029 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50032 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50029 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50032 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50046 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50049 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50052 - "GET /documents/20220421-%E6%96%B0%E4%B8%80%E4%BB%A3%E7%A5%A8%E6%8D%AE%E4%B8%80%E6%9C%9F.docx/trace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50061 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50083 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50093 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+WARNING:  WatchFiles detected changes in 'main.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [24395]
+/Users/danugo/workspace/work/nexis/python_services/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+/Users/danugo/workspace/work/nexis/python_services/venv/lib/python3.9/site-packages/google/auth/__init__.py:54: FutureWarning: You are using a Python version 3.9 past its end of life. Google will update google-auth with critical bug fixes on a best-effort basis, but not with any other fixes or features. Please upgrade your Python version, and then update google-auth.
+  warnings.warn(eol_message.format("3.9"), FutureWarning)
+/Users/danugo/workspace/work/nexis/python_services/venv/lib/python3.9/site-packages/google/oauth2/__init__.py:40: FutureWarning: You are using a Python version 3.9 past its end of life. Google will update google-auth with critical bug fixes on a best-effort basis, but not with any other fixes or features. Please upgrade your Python version, and then update google-auth.
+  warnings.warn(eol_message.format("3.9"), FutureWarning)
+INFO:     Started server process [29689]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+RAG Server connected to Redis at localhost:6380
+RAG Server connected to ChromaDB at localhost:8000
+RAG Server connected to Neo4j at bolt://localhost:7687
+RAG API connecting to Redis at localhost:6380
+RAG Server connected to Gemini API
+INFO:     127.0.0.1:50105 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50185 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50187 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50185 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50185 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50192 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50196 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50199 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50199 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50199 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50210 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50221 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50225 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50238 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50241 - "GET /documents/20220421-%E6%96%B0%E4%B8%80%E4%BB%A3%E7%A5%A8%E6%8D%AE%E4%B8%80%E6%9C%9F.docx/trace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50238 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50247 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50238 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50257 - "GET /graph/visualize?limit=500&domain_id=29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50260 - "GET /graph/visualize?limit=500&domain_id=29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50263 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50267 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50271 - "GET /documents/20220421-%E6%96%B0%E4%B8%80%E4%BB%A3%E7%A5%A8%E6%8D%AE%E4%B8%80%E6%9C%9F.docx/trace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50277 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50280 - "GET /graph/visualize?limit=500&domain_id=29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50283 - "GET /graph/visualize?limit=500&domain_id=29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50288 - "POST /graph/ingest_subgraph HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50291 - "GET /graph/visualize?limit=500&search_query=%E5%87%BA%E7%A5%A8%E7%99%BB%E8%AE%B0&domain_id=29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e&exclude_types=Person%2FRole HTTP/1.1" 200 OK

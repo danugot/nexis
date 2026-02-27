@@ -43,7 +43,7 @@ export default function Layout({ children }: LayoutProps) {
     const [provider, setProvider] = useState<string>('gemini');
 
     useEffect(() => {
-        fetch(`${API_BASE_URL}/api/settings`)
+        fetch(`${API_BASE_URL}/settings`)
             .then(res => res.json())
             .then(data => {
                 if (data.llm_provider) setProvider(data.llm_provider);
@@ -54,7 +54,7 @@ export default function Layout({ children }: LayoutProps) {
     const handleSaveSettings = async (selected: string) => {
         setProvider(selected);
         try {
-            await fetch(`${API_BASE_URL}/api/settings`, {
+            await fetch(`${API_BASE_URL}/settings`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ llm_provider: selected })

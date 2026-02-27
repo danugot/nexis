@@ -16,7 +16,7 @@ dotenv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.pa
 load_dotenv(dotenv_path)
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from python_services.db import get_db, Document, Domain, TaxonomyNode, SessionLocal
+from python_services.db import get_db, Document, Domain, TaxonomyNode, SessionLocal, TaxonomySuggestion
 from sqlalchemy.orm import Session
 from fastapi import Depends, Form, UploadFile, File
 import traceback
@@ -57,14 +57,14 @@ except Exception as e:
 class SettingsUpdate(BaseModel):
     llm_provider: str
 
-@app.get("/api/settings")
+@app.get("/settings")
 async def get_settings():
     if not redis_client:
         return {"llm_provider": "gemini"}
     provider = redis_client.get("nexis:settings:llm_provider")
     return {"llm_provider": provider if provider else "gemini"}
 
-@app.put("/api/settings")
+@app.put("/settings")
 async def update_settings(req: SettingsUpdate):
     if not redis_client:
         return {"status": "error", "message": "Redis not connected"}
@@ -75,22 +75,27 @@ class DomainCreate(BaseModel):
     name: str
     description: Optional[str] = None
 
-@app.get("/api/domains")
+@app.get("/domains")
 def get_domains(db: Session = Depends(get_db)):
     domains = db.query(Domain).all()
     return [{"id": d.id, "name": d.name, "description": d.description} for d in domains]
 
-@app.post("/api/domains")
+@app.post("/domains")
 def create_domain(domain: DomainCreate, db: Session = Depends(get_db)):
     db_domain = Domain(id=str(uuid.uuid4()), name=domain.name, description=domain.description)
     db.add(db_domain)
     db.commit()
     return {"status": "success", "id": db_domain.id}
 
-@app.delete("/api/domains/{domain_id}")
+@app.delete("/domains/{domain_id}")
 def delete_domain(domain_id: str, db: Session = Depends(get_db)):
     domain = db.query(Domain).filter(Domain.id == domain_id).first()
     if domain:
+        # Manually delete dependent records to avoid SQLAlchemy/PostgreSQL foreign key conflicts and orphans
+        db.query(TaxonomySuggestion).filter(TaxonomySuggestion.domainId == domain_id).delete(synchronize_session=False)
+        db.query(TaxonomyNode).filter(TaxonomyNode.domainId == domain_id).delete(synchronize_session=False)
+        db.query(Document).filter(Document.domainId == domain_id).update({"domainId": None}, synchronize_session=False)
+        
         db.delete(domain)
         db.commit()
         return {"status": "success"}
@@ -104,12 +109,12 @@ class TaxonomyNodeCreate(BaseModel):
 class TaxonomyNodeUpdate(BaseModel):
     name: str
 
-@app.get("/api/domains/{domain_id}/taxonomy")
+@app.get("/domains/{domain_id}/taxonomy")
 def get_taxonomy(domain_id: str, db: Session = Depends(get_db)):
     nodes = db.query(TaxonomyNode).filter(TaxonomyNode.domainId == domain_id).all()
     return [{"id": n.id, "name": n.name, "level": n.level, "parentId": n.parentId} for n in nodes]
 
-@app.post("/api/domains/{domain_id}/taxonomy")
+@app.post("/domains/{domain_id}/taxonomy")
 def create_taxonomy_node(domain_id: str, node: TaxonomyNodeCreate, db: Session = Depends(get_db)):
     db_node = TaxonomyNode(
         id=str(uuid.uuid4()),
@@ -122,7 +127,7 @@ def create_taxonomy_node(domain_id: str, node: TaxonomyNodeCreate, db: Session =
     db.commit()
     return {"status": "success", "id": db_node.id}
 
-@app.delete("/api/domains/{domain_id}/taxonomy/{node_id}")
+@app.delete("/domains/{domain_id}/taxonomy/{node_id}")
 def delete_taxonomy_node(domain_id: str, node_id: str, db: Session = Depends(get_db)):
     node = db.query(TaxonomyNode).filter(TaxonomyNode.id == node_id, TaxonomyNode.domainId == domain_id).first()
     if node:
@@ -131,7 +136,7 @@ def delete_taxonomy_node(domain_id: str, node_id: str, db: Session = Depends(get
         return {"status": "success"}
     raise HTTPException(status_code=404, detail="Node not found")
 
-@app.put("/api/domains/{domain_id}/taxonomy/{node_id}")
+@app.put("/domains/{domain_id}/taxonomy/{node_id}")
 def update_taxonomy_node(domain_id: str, node_id: str, node_update: TaxonomyNodeUpdate, db: Session = Depends(get_db)):
     node = db.query(TaxonomyNode).filter(TaxonomyNode.id == node_id, TaxonomyNode.domainId == domain_id).first()
     if not node:
@@ -139,6 +144,148 @@ def update_taxonomy_node(domain_id: str, node_id: str, node_update: TaxonomyNode
     node.name = node_update.name
     db.commit()
     return {"status": "success", "id": node.id, "name": node.name}
+
+# --- AI Suggestions Endpoints ---
+
+@app.get("/domains/{domain_id}/suggestions")
+def get_taxonomy_suggestions(domain_id: str, db: Session = Depends(get_db)):
+    suggestions = db.query(TaxonomySuggestion).filter(
+        TaxonomySuggestion.domainId == domain_id
+    ).order_by(TaxonomySuggestion.createdAt.desc()).all()
+    
+    return [{
+        "id": s.id,
+        "domainId": s.domainId,
+        "proposedPath": s.proposedPath,
+        "reasoning": s.reasoning,
+        "status": s.status,
+        "createdAt": s.createdAt.isoformat()
+    } for s in suggestions]
+
+class SuggestionResolutionRequest(BaseModel):
+    action: str # 'APPROVE' or 'REJECT'
+    approvedPath: Optional[str] = None
+    level: Optional[str] = "CATEGORY"
+    parentId: Optional[str] = None
+
+@app.put("/domains/{domain_id}/suggestions/{suggestion_id}")
+def resolve_taxonomy_suggestion(domain_id: str, suggestion_id: str, req: SuggestionResolutionRequest, db: Session = Depends(get_db)):
+    suggestion = db.query(TaxonomySuggestion).filter(
+        TaxonomySuggestion.id == suggestion_id, 
+        TaxonomySuggestion.domainId == domain_id
+    ).first()
+    
+    if not suggestion:
+        raise HTTPException(status_code=404, detail="Suggestion not found")
+        
+    if suggestion.status != "PENDING":
+        raise HTTPException(status_code=400, detail=f"Suggestion already {suggestion.status}")
+
+    if req.action == "APPROVE":
+        if not req.approvedPath:
+             raise HTTPException(status_code=400, detail="approvedPath is required to approve.")
+             
+        # Create an actual taxonomy node
+        # Since we use Prisma/Neo4j merged model, we write to SQL, then it triggers real graph creation
+        path_parts = [p.strip() for p in req.approvedPath.split(">") if p.strip()]
+        
+        current_parent_id = None
+        current_level_idx = 0
+        LEVEL_NAMES = ["CATEGORY", "MODULE", "SUBMODULE", "FEATURE", "SUBFEATURE"]
+        final_node_id = None
+        
+        neo4j_nodes_to_merge = []
+        
+        for part_name in path_parts:
+            # Check if this node exists in SQL
+            existing_node = db.query(TaxonomyNode).filter(
+                TaxonomyNode.domainId == domain_id,
+                TaxonomyNode.name == part_name,
+                TaxonomyNode.parentId == current_parent_id
+            ).first()
+            
+            if existing_node:
+                final_node_id = existing_node.id
+                current_parent_id = existing_node.id
+                # Attempt to sync index if found:
+                try:
+                    current_level_idx = LEVEL_NAMES.index(existing_node.level) + 1
+                except ValueError:
+                    current_level_idx += 1
+            else:
+                final_node_id = str(uuid.uuid4())
+                mapped_level = LEVEL_NAMES[current_level_idx] if current_level_idx < len(LEVEL_NAMES) else "FEATURE"
+                new_node = TaxonomyNode(
+                    id=final_node_id,
+                    domainId=domain_id,
+                    name=part_name,
+                    level=mapped_level,
+                    parentId=current_parent_id
+                )
+                db.add(new_node)
+                db.flush()
+                neo4j_nodes_to_merge.append({
+                    "id": final_node_id,
+                    "name": part_name,
+                    "parentId": current_parent_id
+                })
+                current_parent_id = final_node_id
+                current_level_idx += 1
+                
+        suggestion.status = "APPROVED"
+        db.commit()
+        
+        # Now, we should also formally run MERGE in Neo4j to link any waiting nodes
+        # The frontend/agent may have just pointed `BELONGS_TO` to the `suggestion_id`.
+        if neo4j_driver:
+             try:
+                 with neo4j_driver.session() as session:
+                     # 1. Create the real Category in Neo4j
+                     for node_data in neo4j_nodes_to_merge:
+                         session.run(
+                             """
+                             MERGE (nx:TaxonomyNode {id: $nid}) 
+                             SET nx.name = $name 
+                             WITH nx 
+                             MATCH (dom:Domain {id: $domain_id}) 
+                             MERGE (nx)-[:IN_DOMAIN]->(dom)
+                             """,
+                             nid=node_data["id"], name=node_data["name"], domain_id=domain_id
+                         )
+                         if node_data["parentId"]:
+                              session.run(
+                                  """
+                                  MATCH (child:TaxonomyNode {id: $child_id}) 
+                                  MATCH (parent:TaxonomyNode {id: $parent_id}) 
+                                  MERGE (child)-[:PART_OF]->(parent)
+                                  """,
+                                  child_id=node_data["id"], parent_id=node_data["parentId"]
+                              )
+                          
+                     # 2. Re-wire orphaned entities from suggestion ID to standard taxonomy ID
+                     session.run(
+                         """
+                         MATCH (e:Entity)-[r:BELONGS_TO]->(sugg:TaxonomyNode {id: $sugg_id})
+                         MATCH (real:TaxonomyNode {id: $real_id})
+                         MERGE (e)-[:BELONGS_TO]->(real)
+                         DELETE r
+                         """,
+                         sugg_id=suggestion_id, real_id=final_node_id
+                     )
+                     
+             except Exception as e:
+                 print(f"Failed to reconcile graph for suggestion {suggestion_id}: {e}")
+                 
+        return {"status": "success", "message": "Suggestion approved and nodes migrated", "newNodeId": final_node_id}
+        
+    elif req.action == "REJECT":
+        suggestion.status = "REJECTED"
+        db.commit()
+        # Optionally, delete the placeholder nodes from Neo4j (for now just leave them orphaned or let them fall back to general document level)
+        return {"status": "success", "message": "Suggestion rejected"}
+    
+    else:
+        raise HTTPException(status_code=400, detail="Invalid action")
 
 # Initialize ChromaDB
 try:
@@ -163,8 +310,9 @@ class QueryRequest(BaseModel):
     query: str
     n_results: int = 3
     domain_id: str = None
+    project_name: str = None
 
-def query_graph(search_term, domain_id=None):
+def query_graph(search_term, domain_id=None, project_name=None):
     """
     Simple graph retrieval: Find nodes with names matching the search term (partial)
     and return their 1-hop relationships.
@@ -178,7 +326,11 @@ def query_graph(search_term, domain_id=None):
             # Add domain filter if specified
             domain_match = ""
             if domain_id:
-                domain_match = f"MATCH (m)-[:IN_DOMAIN]->(:Domain {{id: '{domain_id}'}})"
+                domain_match = f"MATCH (d)-[:IN_DOMAIN]->(:Domain {{id: '{domain_id}'}})"
+
+            project_match = ""
+            if project_name:
+                project_match = f"AND d.projectName CONTAINS '{project_name}'"
 
             result = session.run(
                 f"""
@@ -186,7 +338,7 @@ def query_graph(search_term, domain_id=None):
                 MATCH (e:Entity)
                 WHERE toLower(e.name) CONTAINS toLower($term)
                 MATCH (e)-[:MENTIONED_IN]->(d:Document)
-                WHERE coalesce(d.status, 'EFFECTIVE') = 'EFFECTIVE'
+                WHERE coalesce(d.status, 'EFFECTIVE') = 'EFFECTIVE' {project_match}
                 OPTIONAL MATCH (e)-[:BELONGS_TO]->(tx:TaxonomyNode)
                 {domain_match}
                 RETURN e.name + ' (' + e.type + ') belongs to Category: ' + coalesce(tx.name, 'Unknown') + ' [Source: ' + d.name + ']' as fact
@@ -200,7 +352,7 @@ def query_graph(search_term, domain_id=None):
                 {domain_match}
                 MATCH (e:Entity)-[:BELONGS_TO]->(tx)
                 MATCH (e)-[:MENTIONED_IN]->(d:Document)
-                WHERE coalesce(d.status, 'EFFECTIVE') = 'EFFECTIVE'
+                WHERE coalesce(d.status, 'EFFECTIVE') = 'EFFECTIVE' {project_match}
                 RETURN 'Category ' + tx.name + ' contains: ' + coalesce(e.name, 'No entities') + ' [Source: ' + d.name + ']' as fact
                 LIMIT 15
                 """,
@@ -223,6 +375,7 @@ async def get_documents(db: Session = Depends(get_db)):
             "id": d.id,
             "filename": d.filename,
             "version": d.version,
+            "projectName": d.projectName,
             "domainName": domain_name,
             "domainId": d.domainId,
             "jiraId": d.jiraId,
@@ -243,13 +396,20 @@ async def archive_document(doc_id: str, db: Session = Depends(get_db)):
     db.commit()
     
     # 2. Cleanup physical storage in Chroma (Vector DB)
-    if chroma_collection:
+    trace_collection = chroma_collection
+    if doc and doc.domainId:
+        safe_id = doc.domainId.replace('-', '_')
         try:
-            chroma_collection.delete(where={"source": doc.filename})
+            trace_collection = chroma_client.get_collection(name=f"nexis_{safe_id}")
+        except Exception:
+            pass
+
+    if trace_collection:
+        try:
+            trace_collection.delete(where={"source": doc.filename})
             print(f"Deleted vector chunks for {doc.filename}")
         except Exception as e:
             print(f"Warning: Failed to delete Chroma vectors for {doc.filename}: {e}")
-            
     # 3. Mark Neo4j Graph elements as deleted (Optional MVP improvement)
     if neo4j_driver:
         try:
@@ -368,16 +528,29 @@ async def get_document_trace(filename: str):
     
     # 1. Fetch Markdown Content
     name, _ = os.path.splitext(filename)
-    # RAG API runs from nexis/ so knowledge dir should be at nexis/knowledge/
-    kb_path = os.path.join(os.getcwd(), "knowledge", f"{name}.md")
+    # The worker saves to services/worker/knowledge/
+    worker_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "worker")
+    kb_path = os.path.join(worker_dir, "knowledge", f"{name}.md")
     if os.path.exists(kb_path):
         with open(kb_path, 'r', encoding='utf-8') as f:
             trace_data["markdown_content"] = f.read()
             
     # 2. Fetch Vector Chunk Count and Details
-    if chroma_collection:
+    db = SessionLocal()
+    doc = db.query(Document).filter(Document.filename == filename).first()
+    
+    trace_collection = chroma_collection
+    if doc and doc.domainId:
+        safe_id = doc.domainId.replace('-', '_')
         try:
-            results = chroma_collection.get(where={"source": filename})
+            trace_collection = chroma_client.get_collection(name=f"nexis_{safe_id}")
+        except Exception:
+            pass
+    db.close()
+
+    if trace_collection:
+        try:
+            results = trace_collection.get(where={"source": filename})
             if results and results['ids']:
                 trace_data["vector_chunk_count"] = len(results['ids'])
                 trace_data["vector_chunks"] = [
@@ -397,7 +570,7 @@ async def get_document_trace(filename: str):
                  result = session.run(
                      """
                      MATCH (e:Entity)-[:MENTIONED_IN]->(d:Document {name: $filename})
-                     RETURN e.name as name, e.type as type, coalesce(e.extracted_by, 'gemini') as extracted_by
+                     RETURN e.name as name, e.type as type, coalesce(e.extracted_by, 'Unknown') as extracted_by
                      """,
                      filename=filename
                  )
@@ -412,8 +585,29 @@ async def retrieve(request: QueryRequest, db: Session = Depends(get_db)):
     context_items = []
 
     # 1. Vector Search
-    collection = chroma_collection
-    if request.domain_id:
+    where_clause = None
+    if request.project_name:
+        # First, find all documents matching this project name using Postgres ILIKE
+        matching_docs = db.query(Document).filter(
+            Document.projectName.ilike(f"%{request.project_name}%"),
+            Document.status != "ARCHIVED"
+        ).all()
+        
+        filenames = [d.filename for d in matching_docs]
+        
+        if not filenames:
+            # If no docs match the project, vector search should yield nothing
+            v_ids, v_docs, v_metas = [], [], []
+            vector_ranks, bm25_ranks, bm25_ranked = {}, {}, []
+            collection = None # Skip vector search
+        elif len(filenames) == 1:
+            where_clause = {"source": filenames[0]}
+        else:
+            where_clause = {"source": {"$in": filenames}}
+
+    collection = chroma_collection if 'collection' not in locals() or collection is not None else None
+    
+    if request.domain_id and collection is not None:
         safe_id = request.domain_id.replace('-', '_')
         try:
             collection = chroma_client.get_or_create_collection(name=f"nexis_{safe_id}")
@@ -422,30 +616,93 @@ async def retrieve(request: QueryRequest, db: Session = Depends(get_db)):
 
     if collection:
         try:
-            results = collection.query(
+            # 1a. Semantic Search (Top-K)
+            vector_k = max(20, request.n_results * 4) 
+            vector_results = collection.query(
                 query_texts=[request.query],
-                n_results=request.n_results
+                n_results=vector_k,
+                where=where_clause
             )
-            documents = results['documents'][0] if results['documents'] else []
-            metadatas = results['metadatas'][0] if results['metadatas'] else []
+            v_ids = vector_results['ids'][0] if vector_results['ids'] else []
+            v_docs = vector_results['documents'][0] if vector_results['documents'] else []
+            v_metas = vector_results['metadatas'][0] if vector_results['metadatas'] else []
             
-            for doc, meta in zip(documents, metadatas):
+            vector_ranks = {vid: rank for rank, vid in enumerate(v_ids)}
+            
+            # 1b. BM25 Lexical Search (Over the entire domain collection)
+            all_chunks = collection.get(where=where_clause)
+            all_ids = all_chunks.get('ids', [])
+            all_docs = all_chunks.get('documents', [])
+            all_metas = all_chunks.get('metadatas', [])
+            
+            bm25_ranks = {}
+            bm25_ranked = []
+            if all_docs:
+                tokenized_corpus = [list(jieba.cut(str(doc))) for doc in all_docs]
+                bm25 = BM25Okapi(tokenized_corpus)
+                tokenized_query = list(jieba.cut(request.query))
+                bm25_scores = bm25.get_scores(tokenized_query)
+                
+                # Zip and sort by BM25 score DESC
+                bm25_ranked = sorted(zip(all_ids, bm25_scores, all_docs, all_metas), key=lambda x: x[1], reverse=True)
+                # Assign rank only to those with scores > 0
+                bm25_ranks = {vid: rank for rank, (vid, score, doc, meta) in enumerate(bm25_ranked) if score > 0} 
+            
+            # 1c. Reciprocal Rank Fusion (RRF)
+            k_rrf = 60
+            rrf_scores = {}
+            doc_map = {}
+            
+            # Fuse semantic hits
+            for vid, doc, meta in zip(v_ids, v_docs, v_metas):
+                doc_map[vid] = (doc, meta)
+                v_rank = vector_ranks.get(vid, 1000)
+                b_rank = bm25_ranks.get(vid, 1000)
+                rrf_scores[vid] = (1.0 / (k_rrf + v_rank)) + (1.0 / (k_rrf + b_rank))
+                
+            # Fuse top lexical hits (that might have been missed by Semantic top-K)
+            for vid, score, doc, meta in bm25_ranked[:20]:
+                if vid not in doc_map and score > 0:
+                    doc_map[vid] = (doc, meta)
+                    v_rank = 1000 # Penalize for failing semantic retrieval
+                    b_rank = bm25_ranks.get(vid, 1000)
+                    rrf_scores[vid] = (1.0 / (k_rrf + v_rank)) + (1.0 / (k_rrf + b_rank))
+                    
+            # 1d. Sort & Select Top N
+            sorted_rrf = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
+            
+            for vid, score in sorted_rrf[:request.n_results]:
+                doc, meta = doc_map[vid]
+                # HARD CUTOFF: If RRF score is terrible (e.g., both rankings > 50), skip it entirely
+                # or if the user question has NO keyword matches and NOT the #1 vector match.
+                # Here we just take the mathematically best RRF bounds.
                 context_items.append({
                     "type": "vector",
                     "content": doc,
-                    "source": meta.get("source", "unknown")
+                    "source": meta.get("source", "unknown"),
+                    "rrf_score": score
                 })
         except Exception as e:
-            print(f"Vector search failed: {e}")
+            print(f"Hybrid search failed: {e}")
+            traceback.print_exc()
 
     # 2. Graph Search (Simple Keyword Extraction from Query)
-    # For MVP, we use the whole query or split by space. 
-    # Ideal: Use LLM to extract entities first.
-    # Here: Just try to match the full query or key terms? 
-    # Let's take the first 2 significant words or the whole string if short.
-    search_term = request.query.split(' ')[-1] if ' ' in request.query else request.query # Naive heuristic
+    # Use jieba to extract meaningful nouns/terms, filter out stop words
+    ignore_words = {"功能", "实现", "主要", "哪些", "怎么", "什么", "如何", "系统", "模块", "项目"}
+    parts = []
+    for word in jieba.cut(request.query):
+        w = word.strip()
+        if len(w) > 1 and w not in ignore_words:
+            parts.append(w)
+            
+    search_terms = parts if parts else [request.query]
     
-    graph_facts = query_graph(search_term, domain_id=request.domain_id)
+    graph_facts_set = set()
+    for term in search_terms:
+         facts = query_graph(term, domain_id=request.domain_id, project_name=request.project_name)
+         graph_facts_set.update(facts)
+
+    graph_facts = list(graph_facts_set)[:20] # Take up to 20 unique facts
     for fact in graph_facts:
          context_items.append({
             "type": "graph",
@@ -468,7 +725,7 @@ async def get_graph_visualization(limit: int = 300, search_query: str = None, ex
             with neo4j_driver.session() as session:
                 domain_match = ""
                 if domain_id:
-                    domain_match = f"MATCH (n)-[*]-(:Domain {{id: '{domain_id}'}})"
+                    domain_match = f"MATCH (n)-[*1..3]-(:Domain {{id: '{domain_id}'}})"
 
                 if expand_node_id:
                     # Specific node expansion - exact 1 hop
@@ -497,16 +754,19 @@ async def get_graph_visualization(limit: int = 300, search_query: str = None, ex
                     """
                     result = session.run(query, search_query=search_query)
                 else:
-                    # Default: get a comprehensive subgraph
+                    # Default: get a comprehensive subgraph bound to domain
                     query = f"""
-                    MATCH (s)-[r]->(t)
+                    MATCH (n:Entity)
                     {domain_match}
-                    RETURN s, r, t
+                    WITH DISTINCT n LIMIT {limit // 2}
+                    MATCH (n)-[r]-(m)
+                    RETURN DISTINCT n as s, r, m as t
                     LIMIT {limit}
                     """
                     result = session.run(query)
                 
                 seen_nodes = set()
+                seen_links = set()
                 
                 def get_node_props(node):
                     node_id = str(node.element_id) if hasattr(node, "element_id") else str(node.id)
@@ -564,12 +824,14 @@ async def get_graph_visualization(limit: int = 300, search_query: str = None, ex
                         display_type = " | ".join(rel_types)
                     else:
                         display_type = rel.type
-
-                    links.append({
-                        "source": s_props["id"],
-                        "target": t_props["id"],
-                        "type": display_type
-                    })
+                    link_key = f"{s_props['id']}--{display_type}--{t_props['id']}"
+                    if link_key not in seen_links:
+                        links.append({
+                            "source": s_props["id"],
+                            "target": t_props["id"],
+                            "type": display_type
+                        })
+                        seen_links.add(link_key)
                     
         except Exception as e:
             print(f"Graph visualization error: {e}")
@@ -577,9 +839,87 @@ async def get_graph_visualization(limit: int = 300, search_query: str = None, ex
             
     return {"nodes": nodes, "links": links}
 
+class SubgraphIngestRequest(BaseModel):
+    domainId: str
+    categoryId: str  # Can be a real TaxonomyNode ID or a TaxonomySuggestion ID
+    sourceDocument: str
+    projectName: Optional[str] = None
+    extractedBy: str = "Unknown"
+    entities: list
+    relationships: list
+
+@app.post("/graph/ingest_subgraph")
+async def ingest_subgraph(req: SubgraphIngestRequest):
+    if not neo4j_driver:
+        raise HTTPException(status_code=500, detail="Neo4j driver not connected")
+        
+    try:
+        with neo4j_driver.session() as session:
+            # 1. Ensure Domain anchor
+            session.run("MERGE (dom:Domain {id: $domain_id})", domain_id=req.domainId)
+            
+            # 2. Document anchor
+            cypher_doc = """
+                MERGE (d:Document {name: $filename})
+                SET d.status = 'EFFECTIVE', d.version = 'latest', d.ingested_at = datetime()
+            """
+            if req.projectName:
+                cypher_doc += " SET d.projectName = $project_name "
+            cypher_doc += """
+                MERGE (dom:Domain {id: $domain_id})
+                MERGE (d)-[:IN_DOMAIN]->(dom)
+            """
+            session.run(cypher_doc, filename=req.sourceDocument, domain_id=req.domainId, project_name=req.projectName)
+            
+            # 3. Create Nodes
+            for node in req.entities:
+                session.run(
+                    """
+                    MERGE (n:Entity {name: $name}) 
+                    SET n.type = $type, n.extracted_by = $extracted_by
+                    WITH n
+                    MATCH (d:Document {name: $filename})
+                    MERGE (n)-[:MENTIONED_IN]->(d)
+                    """,
+                    name=node["name"], type=node.get("type", "UNKNOWN"), 
+                    extracted_by=req.extractedBy,
+                    filename=req.sourceDocument
+                )
+                
+                # Link to category (whether strict or suggested)
+                # It doesn't matter for Neo4j, we just attach it to an identifier
+                session.run(
+                    """
+                    MATCH (n:Entity {name: $name}) 
+                    MERGE (tx:TaxonomyNode {id: $cat_id})
+                    MERGE (n)-[:BELONGS_TO]->(tx)
+                    """,
+                    name=node["name"], cat_id=req.categoryId
+                )
+            
+            # 4. Create Edges
+            for edge in req.relationships:
+                session.run(
+                    """
+                    MATCH (a:Entity {name: $source}), (b:Entity {name: $target})
+                    MERGE (a)-[r:RELATION]->(b)
+                    ON CREATE SET r.types = [$relation]
+                    ON MATCH SET r.types = CASE WHEN NOT $relation IN r.types THEN r.types + $relation ELSE r.types END
+                    """,
+                    source=edge["source"], target=edge["target"], relation=edge["type"]
+                )
+                
+        return {"status": "success", "nodes_created": len(req.entities), "relationships_created": len(req.relationships)}
+    except Exception as e:
+        print(f"Error in ingest_subgraph: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 import redis
 import json
 import shutil
+import jieba
+from rank_bm25 import BM25Okapi
 from fastapi import UploadFile, File, Form
 
 # Redis Configuration
@@ -596,6 +936,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 async def upload_document(
     file: UploadFile = File(...),
     domainId: str = Form(None),
+    projectName: str = Form(None),
     jiraId: str = Form(None),
     version: str = Form("v1.0"),
     db: Session = Depends(get_db)
@@ -610,6 +951,7 @@ async def upload_document(
             id=doc_id,
             filename=file.filename,
             version=version,
+            projectName=projectName,
             domainId=domainId,
             jiraId=jiraId,
             status="QUEUED"
@@ -622,6 +964,7 @@ async def upload_document(
             "type": "ingest",
             "filePath": file_path,
             "filename": file.filename,
+            "projectName": projectName,
             "documentId": doc_id # Pass Postgres ID to worker
         }
         redis_client.rpush("nexis:ingest:queue", json.dumps(job))

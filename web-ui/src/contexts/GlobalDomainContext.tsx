@@ -26,7 +26,7 @@ export const GlobalDomainProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const refreshDomains = async () => {
         setIsLoading(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/api/domains`);
+            const res = await fetch(`${API_BASE_URL}/domains`);
             const data = await res.json();
             setDomains(data);
 

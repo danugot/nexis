@@ -4,6 +4,7 @@ import fetch from "node-fetch";
 export interface RetrieveKnowledgeInput {
     query: string;
     n_results?: number;
+    projectName?: string;
 }
 
 export interface KnowledgeItem {
@@ -18,13 +19,18 @@ export interface RetrieveKnowledgeResult {
 }
 
 export async function retrieveKnowledge(input: RetrieveKnowledgeInput, domainId?: string): Promise<RetrieveKnowledgeResult> {
-    const { query, n_results = 3 } = input;
+    const { query, n_results = 5, projectName } = input;
 
     try {
         const response = await fetch("http://localhost:8001/retrieve", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ query, n_results, domain_id: domainId })
+            body: JSON.stringify({
+                query,
+                n_results,
+                domain_id: domainId,
+                project_name: projectName
+            })
         });
 
         if (!response.ok) {

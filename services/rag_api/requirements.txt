@@ -6,3 +6,5 @@ python-dotenv
 python-multipart
 google-generativeai
 redis
+jieba
+rank_bm25

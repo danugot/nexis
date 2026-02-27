@@ -1,9 +1,0 @@
-
-> web-ui@0.0.0 dev /Users/danugo/workspace/work/nexis/web-ui
-> vite -- --port 5173 --strictPort
-
-
-  VITE v7.3.1  ready in 1308 ms
-
-  ➜  Local:   http://localhost:5173/
-  ➜  Network: use --host to expose

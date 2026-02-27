@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
-import { MessageSquare, Plus, Trash2 } from "lucide-react"
+import { MessageSquare, Plus, Trash2, Search } from "lucide-react"
 import { useGlobalDomain } from '../contexts/GlobalDomainContext'
 
 export default function Chat() {
@@ -98,9 +98,20 @@ export default function Chat() {
     const sendMessage = async () => {
         if (!input.trim() || !currentSessionId) return
 
-        const currentInput = input
+        let currentInput = input
+        let extractedProjectName = undefined
 
-        const userMsg = { role: 'user', content: currentInput }
+        // Parse @mention
+        const mentionMatch = currentInput.match(/@(\S+)/);
+        if (mentionMatch) {
+            extractedProjectName = mentionMatch[1];
+            currentInput = currentInput.replace(mentionMatch[0], '').trim();
+        }
+
+        if (!currentInput && !extractedProjectName) return;
+
+        // Visual message relies on the cleaned input, but displays the extracted project name separately as a badge
+        const userMsg = { role: 'user', content: currentInput, projectName: extractedProjectName }
         // Extend assistant message to potentially store an array of tool traces
         const aiMsg = { role: 'assistant', content: '', tools: [] as any[] }
 
@@ -118,7 +129,8 @@ export default function Chat() {
                 body: JSON.stringify({
                     query: currentInput,
                     sessionId: currentSessionId,
-                    domainId: activeDomain?.id
+                    domainId: activeDomain?.id,
+                    projectName: extractedProjectName
                 })
             });
 
@@ -237,6 +249,13 @@ export default function Chat() {
                             <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                 <div className={`rounded-lg p-3 max-w-[80%] ${m.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted border border-border/50'
                                     }`}>
+                                    {/* User Project Context Badge */}
+                                    {m.role === 'user' && m.projectName && (
+                                        <div className="flex items-center gap-1 mb-2 pb-2 text-xs font-medium border-b border-primary-foreground/20 opacity-90">
+                                            <Search size={12} className="opacity-80" />
+                                            <span>检索范围: {m.projectName}</span>
+                                        </div>
+                                    )}
                                     {/* Render Tool Calls as internal thoughts */}
                                     {m.role === 'assistant' && m.tools && m.tools.length > 0 && (
                                         <div className="mb-2 pl-2 border-l-2 border-blue-400/50 space-y-1">

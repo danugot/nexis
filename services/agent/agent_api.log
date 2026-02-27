@@ -1,0 +1,4 @@
+[dotenv@17.3.1] injecting env (10) from ../../.env -- tip: ⚙️  suppress all logs with { quiet: true }
+[dotenv@17.3.1] injecting env (1) from .env -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+[dotenv@17.3.1] injecting env (0) from .env -- tip: ⚙️  override existing env vars with { override: true }
+Agent API Server listening at http://localhost:8002

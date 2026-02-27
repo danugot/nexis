@@ -6,8 +6,8 @@ import json
 import time
 import re
 import yaml # [NEW]
-from markitdown import MarkItDown
-from markitdown import MarkItDown
+import docx2txt
+import PyPDF2
 import chromadb
 from neo4j import GraphDatabase
 from google import genai
@@ -24,7 +24,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from python_services.db import get_db, Document, Project, SessionLocal
+from python_services.db import get_db, Document, Domain, SessionLocal
 
 # Configuration
 REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
@@ -76,8 +76,21 @@ else:
     client = None
     print("Warning: GEMINI_API_KEY not set")
 
-# Initialize MarkItDown
-markitdown = MarkItDown()
+# Custom extractor replacing markitdown for python 3.9 compatibility
+def extract_text(file_path):
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext == '.docx':
+        return docx2txt.process(file_path)
+    elif ext == '.pdf':
+        text = ""
+        with open(file_path, 'rb') as f:
+            reader = PyPDF2.PdfReader(f)
+            for page in reader.pages:
+                text += page.extract_text() + "\n"
+        return text
+    else:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return f.read()
 
 def semantic_chunking(markdown_text, max_chunk_size=1000):
     """
@@ -144,7 +157,7 @@ def semantic_chunking(markdown_text, max_chunk_size=1000):
         
     return chunks
 
-def ingest_to_vector_db(filename, content, domain_id=None):
+def ingest_to_vector_db(filename, content, domain_id=None, project_name=None):
     """
     Ingests text content into ChromaDB using semantic chunking.
     """
@@ -167,7 +180,12 @@ def ingest_to_vector_db(filename, content, domain_id=None):
         chunks = semantic_chunking(content)
         
         ids = [f"{filename}_{i}" for i in range(len(chunks))]
-        metadatas = [{"source": filename, "chunk_index": i} for i in range(len(chunks))]
+        metadatas = []
+        for i in range(len(chunks)):
+            meta = {"source": filename, "chunk_index": i}
+            if project_name:
+                meta["projectName"] = project_name
+            metadatas.append(meta)
         
         if chunks:
             chroma_collection.add(documents=chunks, metadatas=metadatas, ids=ids)
@@ -250,8 +268,8 @@ def extract_and_ingest_graph(filename, content, domain_id=None):
     if redis_client:
         try:
             val = redis_client.get("nexis:settings:llm_provider")
-            if val == "qwen-plus":
-                llm_provider = "qwen-plus"
+            if val:
+                llm_provider = val
         except:
             pass
 
@@ -300,141 +318,42 @@ def extract_and_ingest_graph(filename, content, domain_id=None):
         response_text = None
         for attempt in range(max_retries):
             try:
-                if llm_provider == "qwen-plus" and openai_client:
-                    completion = openai_client.chat.completions.create(
-                        model="qwen3.5-plus",
-                        messages=[{"role": "user", "content": prompt}],
-                        temperature=0.1
-                    )
-                    response_text = completion.choices[0].message.content
+                import requests
+                AGENT_API_URL = os.getenv('AGENT_API_URL', 'http://localhost:8002')
+                response = requests.post(f"{AGENT_API_URL}/ingest-chunk", json={
+                    "text": batch_text,
+                    "domainId": domain_id,
+                    "source": filename,
+                    "projectName": project_name,
+                    "provider": llm_provider
+                }, timeout=120)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    print(f"Agent finished batch {idx+1}. Cycles: {data.get('cycles')}")
+                    # Node.js Agent's write_subgraph tool already handled the Neo4j MERGEs!
+                    return 1 # Just returning a success count
                 else:
-                    response = client.models.generate_content(
-                        model=os.getenv('GEMINI_MODEL', 'gemini-3-flash-preview'),
-                        contents=prompt,
-                        config=types.GenerateContentConfig(
-                            response_mime_type="application/json"
-                        )
-                    )
-                    response_text = response.text
-                break # Success
+                    print(f"Agent API Error: {response.text}")
+                    
             except Exception as e:
-                print(f"LLM API Error thread {idx+1} (Attempt {attempt+1}/{max_retries}): {e}")
+                print(f"Agent API Failure thread {idx+1} (Attempt {attempt+1}/{max_retries}): {e}")
                 if attempt < max_retries - 1:
                     time.sleep(retry_delay * (attempt + 1))
                 else:
                     print(f"Skipping batch {idx} after max retries.")
                     return None
-        
-        if not response_text:
-            return None
-            
-        # Parse JSON
-        data = None
-        try:
-            data = json.loads(response_text)
-        except json.JSONDecodeError:
-            match = re.search(r'\{.*\}', response_text, re.DOTALL)
-            if match:
-                data = json.loads(match.group(0))
-            else:
-                return None
-        
-        if isinstance(data, list):
-            if len(data) > 0 and isinstance(data[0], dict):
-                data = data[0]
-            else:
-                return None
-        elif not isinstance(data, dict):
-             return None
-
-        category_path = data.get("category_path", "Uncategorized")
-        tax_id = taxonomy_paths.get(category_path, None)
-
-        try:
-            with neo4j_driver.session() as session:
-                # 1. Create Document Anchor with Lifecycle Properties
-                session.run(
-                    """
-                    MERGE (d:Document {name: $filename})
-                    SET d.status = 'EFFECTIVE', d.version = 'latest', d.ingested_at = datetime()
-                    """,
-                    filename=filename
-                )
-
-                # 2. Link Document to selected TaxonomyNode or Domain
-                if tax_id:
-                    session.run(
-                        """
-                        MATCH (d:Document {name: $filename})
-                        MATCH (tx:TaxonomyNode {id: $tax_id})
-                        MERGE (d)-[:CONTAINS]->(tx)
-                        """,
-                        filename=filename, tax_id=tax_id
-                    )
-                else:
-                    session.run(
-                        """
-                        MATCH (d:Document {name: $filename})
-                        MATCH (dom:Domain {id: $domain_id})
-                        MERGE (d)-[:IN_DOMAIN]->(dom)
-                        """,
-                        filename=filename, domain_id=domain_id or 'default'
-                    )
-
-                # 3. Create Nodes & Link to Document and optionally to TaxonomyNode
-                for node in data.get("nodes", []):
-                    session.run(
-                        """
-                        MERGE (n:Entity {name: $name}) 
-                        SET n.type = $type,
-                            n.extracted_by = $llm_provider
-                        WITH n
-                        MATCH (d:Document {name: $filename})
-                        MERGE (n)-[:MENTIONED_IN]->(d)
-                        """,
-                        name=node["name"], type=node["type"], 
-                        llm_provider=llm_provider,
-                        filename=filename
-                    )
-                    if tax_id:
-                        session.run(
-                            """
-                            MATCH (n:Entity {name: $name}) 
-                            MATCH (tx:TaxonomyNode {id: $tax_id})
-                            MERGE (n)-[:BELONGS_TO]->(tx)
-                            """,
-                            name=node["name"], tax_id=tax_id
-                        )
-                
-                # 4. Create Edges
-                for edge in data.get("edges", []):
-                    session.run(
-                        """
-                        MATCH (a:Entity {name: $source}), (b:Entity {name: $target})
-                        MERGE (a)-[r:RELATION]->(b)
-                        ON CREATE SET r.types = [$relation]
-                        ON MATCH SET r.types = CASE WHEN NOT $relation IN r.types THEN r.types + $relation ELSE r.types END
-                        """,
-                        source=edge["source"], target=edge["target"], relation=edge["relation"]
-                    )
-            
-            print(f"Batch {idx+1}/{total_batches} completed: {len(data.get('nodes', []))} nodes.")
-            return len(data.get("nodes", []))
-
-        except Exception as e:
-            print(f"Neo4j Error writing batch {idx}: {e}")
-            return None
-
+                    
     # Step: Execute ThreadPool
     nodes_extracted = 0
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    with ThreadPoolExecutor(max_workers=5) as executor:
         futures = {executor.submit(process_batch, idx, text): idx for idx, text in enumerate(extraction_batches)}
         for future in as_completed(futures):
             res = future.result()
             if res:
                    nodes_extracted += res
                    
-    print(f"--- Concurrent Extraction Complete --- Total raw nodes recorded: {nodes_extracted}")
+    print(f"--- Concurrent Agentic Ingestion Complete --- Batches processed: {nodes_extracted}")
     
     # Deferred Global Conflict Detection
     if nodes_extracted > 0:
@@ -467,28 +386,34 @@ def check_document_conflicts(filename):
         print(f"Error checking global conflicts for {filename}: {e}")
         return False
 
-def process_file(file_path, document_id=None):
+def process_file(file_path, document_id=None, project_name=None):
     print(f"Processing. file: {file_path}, document_id: {document_id}")
     if not os.path.exists(file_path):
         return False
         
     db = SessionLocal()
+    domain_id = None
     try:
-        domain_id = None
         if document_id:
             print(f"Updating Postgres document {document_id} to PROCESSING...")
             doc = db.query(Document).filter(Document.id == document_id).first()
             if doc:
                 domain_id = doc.domainId
+                print(f"[{document_id}] Fetched bound DomainID: {domain_id}")
                 doc.status = "PROCESSING"
                 db.commit()
-                print("Set status to PROCESSING.")
             else:
                 print(f"Document {document_id} not found in DB!")
 
-        # Use MarkItDown for conversion
-        result = markitdown.convert(file_path)
-        md_content = result.text_content
+        if not domain_id:
+             print("WARNING: No domain_id found for this document. Using fallback.")
+
+        try:
+            print(f"[{document_id}] Converting document to markdown format using local extractors...")
+            raw_text = extract_text(file_path)
+            md_content = raw_text # In a real scenario we could ask LLM to format this, but raw text works for RAG
+        except Exception as e:
+            raise Exception(f"Failed to convert document: {e}")
         
         filename = os.path.basename(file_path)
         name, _ = os.path.splitext(filename)
@@ -497,9 +422,9 @@ def process_file(file_path, document_id=None):
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(md_content)
             
-        print(f"Converted to {output_path} using MarkItDown")
+        print(f"Converted to {output_path} using local extractors")
 
-        ingest_to_vector_db(filename, md_content, domain_id)
+        ingest_to_vector_db(filename, md_content, domain_id, project_name)
         extract_and_ingest_graph(filename, md_content, domain_id)
 
         if document_id:
@@ -553,9 +478,10 @@ def main():
                     job = json.loads(job_json)
                     file_path = job.get('filePath')
                     document_id = job.get('documentId')
+                    project_name = job.get('projectName')
                     
                     if file_path:
-                        process_file(file_path, document_id)
+                        process_file(file_path, document_id, project_name)
                     else:
                         print("Invalid job format: missing filePath")
                 except json.JSONDecodeError:

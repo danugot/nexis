@@ -1,0 +1,30 @@
+RAG Server connected to Redis at localhost:6380
+/Users/danugo/workspace/work/nexis/python_services/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+RAG Server connected to ChromaDB at localhost:8000
+RAG Server connected to Neo4j at bolt://localhost:7687
+RAG API connecting to Redis at localhost:6380
+/Users/danugo/workspace/work/nexis/python_services/venv/lib/python3.9/site-packages/google/auth/__init__.py:54: FutureWarning: You are using a Python version 3.9 past its end of life. Google will update google-auth with critical bug fixes on a best-effort basis, but not with any other fixes or features. Please upgrade your Python version, and then update google-auth.
+  warnings.warn(eol_message.format("3.9"), FutureWarning)
+/Users/danugo/workspace/work/nexis/python_services/venv/lib/python3.9/site-packages/google/oauth2/__init__.py:40: FutureWarning: You are using a Python version 3.9 past its end of life. Google will update google-auth with critical bug fixes on a best-effort basis, but not with any other fixes or features. Please upgrade your Python version, and then update google-auth.
+  warnings.warn(eol_message.format("3.9"), FutureWarning)
+RAG Server connected to Gemini API
+INFO:     Started server process [60781]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+Building prefix dict from the default dictionary ...
+Dumping model to file cache /var/folders/fl/8n6sppwn3p39jd875rvvrxz40000gn/T/jieba.cache
+Loading model cost 0.260 seconds.
+Prefix dict has been built successfully.
+Graph query for '票据融合一期主要实现了哪些功能' found 0 facts.
+INFO:     127.0.0.1:59715 - "POST /retrieve HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60024 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60028 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60025 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60039 - "GET /domains HTTP/1.1" 200 OK
+Graph query for '票据融合一期' found 0 facts.
+Graph query for '功能' found 8 facts.
+INFO:     127.0.0.1:60086 - "POST /retrieve HTTP/1.1" 200 OK
+Graph query for '票据融合一期主要实现了哪些功能' found 0 facts.
+INFO:     127.0.0.1:60181 - "POST /retrieve HTTP/1.1" 200 OK

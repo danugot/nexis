@@ -39,18 +39,51 @@ model Project {
   description String?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
-  documents   Document[]
 }
 
 model Document {
+  id            String   @id @default(uuid())
+  filename      String
+  version       String   @default("v1.0")
+  domainId      String?
+  jiraId        String?
+  status        String   @default("QUEUED") // QUEUED, PROCESSING, EFFECTIVE, NEEDS_REVIEW, ARCHIVED
+  error_message String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  domain        Domain?  @relation(fields: [domainId], references: [id], onDelete: SetNull)
+}
+
+model TaxonomySuggestion {
+  id           String   @id @default(uuid())
+  domainId     String
+  proposedPath String
+  reasoning    String
+  status       String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  createdAt    DateTime @default(now())
+}
+
+// --- Sync with Master Database ---
+model Domain {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  taxonomyNodes TaxonomyNode[]
+  documents     Document[]
+}
+
+model TaxonomyNode {
   id        String   @id @default(uuid())
-  filename  String
-  version   String   @default("v1.0")
-  projectId String?
-  jiraId    String?
-  status    String   @default("QUEUED") // QUEUED, PROCESSING, EFFECTIVE, NEEDS_REVIEW, ARCHIVED
+  domainId  String
+  name      String
+  level     String   
+  parentId  String?  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  domain    Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
 }

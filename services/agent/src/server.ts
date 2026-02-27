@@ -9,11 +9,17 @@ dotenv.config(); // Fallback to default
 import express from 'express';
 import cors from 'cors';
 import { GoogleGenerativeAI, FunctionDeclaration, SchemaType } from '@google/generative-ai';
+import OpenAI from 'openai';
+import Redis from 'ioredis';
 import * as fs from 'fs';
 import { checkConflict } from './skills/conflict-checker';
 import { withdrawSkill } from './skills/withdraw-skill';
 import { retrieveKnowledge } from './skills/retrieve-knowledge';
 import { updateKnowledge } from './skills/update-knowledge';
+import { getTaxonomyDeclaration, getTaxonomy } from './skills/ingest-get-taxonomy';
+import { proposeNewCategoryDeclaration, proposeNewCategory } from './skills/ingest-propose-category';
+import { writeSubgraphDeclaration, writeSubgraph } from './skills/ingest-write-subgraph';
+import { reviewTaxonomyQueueDeclaration, reviewTaxonomyQueue } from './skills/review-taxonomy-queue';
 import { prisma } from './db';
 
 // --- Configuration ---
@@ -24,7 +30,14 @@ if (!API_KEY) {
 }
 
 const genAI = new GoogleGenerativeAI(API_KEY);
+const openai = new OpenAI({
+    apiKey: process.env.DASHSCOPE_API_KEY || process.env.OPENAI_API_KEY,
+    baseURL: process.env.OPENAI_BASE_URL || "https://dashscope.aliyuncs.com/compatible-mode/v1"
+});
+
 const KNOWLEDGE_PATH = path.join(process.cwd(), 'knowledge', 'history_prd.md');
+
+const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6380');
 
 function loadKnowledge(): string {
     if (fs.existsSync(KNOWLEDGE_PATH)) {
@@ -118,7 +131,13 @@ const tools: FunctionDeclaration[] = [
             type: SchemaType.OBJECT,
             properties: {},
         }
-    }
+    },
+    // --- Ingestion Agent Tools ---
+    getTaxonomyDeclaration,
+    proposeNewCategoryDeclaration,
+    writeSubgraphDeclaration,
+    // --- Admin Chat Tools ---
+    reviewTaxonomyQueueDeclaration
 ];
 
 // --- Express Server ---
@@ -208,7 +227,7 @@ app.get('/sessions/:id/messages', async (req, res) => {
 });
 
 app.post('/chat', async (req, res) => {
-    const { query, sessionId, domainId } = req.body;
+    const { query, sessionId, domainId, projectName } = req.body;
 
     if (!query || !sessionId) {
         return res.status(400).json({ error: 'Query and sessionId are required.' });
@@ -249,104 +268,215 @@ app.post('/chat', async (req, res) => {
     };
 
     try {
-        const model = genAI.getGenerativeModel({
-            model: "gemini-3-flash-preview",
-            tools: [{ functionDeclarations: tools }],
-        });
-
-        // Initialize chat history with system prompt
-        const formattedHistory = [
-            {
-                role: "user",
-                parts: [{
-                    text: `
-                You are 'Nexis', an Advanced Business Analyst Agent.
-                
-                **Your Core Loop (ReAct):**
-                1. **Retrieve**: When the user asks a question or proposes a change, FIRST use \`retrieve_knowledge\` to gather context (Vector + Graph).
-                2. **Reason**: Analyze the retrieved info. Does the user's request conflict with existing rules? Is it ambiguous?
-                3. **Act**: 
-                   - If checking for consistency, call \`check_conflict\` with the context you found.
-                   - If making a change, DISCUSS with the user first, then use \`update_knowledge\`.
-                   - If answering a question, uses the retrieved knowledge.
-                
-                **Key Rule**: Do not guess. If you lack info, Retrieve it.
-                **Information Separation Rule**: When answering, prioritize facts retrieved from the Knowledge Base (Nexis PRD) and label them '【基于知识库】'. ONLY include your own general industry knowledge (labeled '【通用行业知识补充】') IF the retrieved facts are insufficient or if the user asks for a broader explanation. If the PRD knowledge alone answers the user's question completely, DO NOT add unnecessary general knowledge.
-                ` }]
-            },
-            {
-                role: "model",
-                parts: [{ text: "Understood. I will always Retrieve, Reason, then Act. Ready to assist." }]
-            }
-        ];
-
-        // Format db history format to Gemini history format
-        if (dbMessages && dbMessages.length > 0) {
-            for (const msg of dbMessages) {
-                formattedHistory.push({
-                    role: msg.role === 'assistant' ? 'model' : 'user',
-                    parts: [{ text: msg.content }]
-                });
-            }
+        let modelTag = "gemini-3-flash-preview";
+        try {
+            const val = await redis.get("nexis:settings:llm_provider");
+            if (val) modelTag = val;
+        } catch (err) {
+            console.error("Redis fetch failed defaulting to gemini", err);
         }
 
-        const chat = model.startChat({ history: formattedHistory as any });
+        const systemPrompt = `You are 'Nexis', an Advanced Business Analyst Agent.
+                
+**Your Core Loop (ReAct):**
+1. **Retrieve**: When the user asks a question or proposes a change, FIRST use \`retrieve_knowledge\` to gather context (Vector + Graph).
+2. **Reason**: Analyze the retrieved info. Does the user's request conflict with existing rules? Is it ambiguous?
+3. **Act**: 
+    - If checking for consistency, call \`check_conflict\` with the context you found.
+    - If making a change, DISCUSS with the user first, then use \`update_knowledge\`.
+    - If answering a question, uses the retrieved knowledge.
 
-        let result = await chat.sendMessage(query);
-        let response = result.response;
+**Taxonomy Management (AI Suggestions Queue):**
+- If the user asks about new, pending, or AI-suggested categories, use \`review_taxonomy_queue\` with action="FETCH" to see the list.
+- If the user asks you to approve or reject them, use \`review_taxonomy_queue\` with action="APPROVE" or "REJECT". Always confirm the exact paths you will approve before executing.
 
+**Key Rule**: Do not guess. If you lack info, Retrieve it.
+**Information Separation Rule**: When answering, prioritize facts retrieved from the Knowledge Base (Nexis PRD) and label them '【基于知识库】'. ONLY include your own general industry knowledge (labeled '【通用行业知识补充】') IF the retrieved facts are insufficient or if the user asks for a broader explanation. If the PRD knowledge alone answers the user's question completely, DO NOT add unnecessary general knowledge.
+
+**Entity / Project Name Anti-Hallucination Rule (CRITICAL)**: 
+1. If the user asks about a specific project, system, or document (e.g., "Project A"), you MUST deeply check the 'source' filename in the retrieved context. 
+2. DO NOT assume a file is about "Project A" if its name does not explicitly contain "Project A". (e.g., if the file is named "Project B.docx", it is ONLY about Project B, NOT Project A).
+3. If the retrieved sources do not match the requested project name, you MUST reply: "【基于知识库】：未在知识库中找到关于特定项目或文档《X》的专属内容，但我为您找到了《Y》的相关功能..."
+4. NEVER say "Project X (即 Project Y)" or "Project X is Project Y". They are DIFFERENT THINGS unless explicitly and factually stated in the text.
+
+**Semantic Retrieval Rule (CRITICAL)**:
+When formulating the \`query\` argument for \`retrieve_knowledge\`, DO NOT over-abstract. If the user's prompt contains specific, highly-contextual nouns or features (e.g. '导流路径', '审批流', '回帖路径'), you MUST include those EXACT terms in your query string. Searching for generic terms like "新增功能" will fail to retrieve highly-specific vector chunks.`;
+
+        let finalText = "";
         const executedTools = [];
 
-        // ReAct Loop for Tool Calling
-        while (response.functionCalls()) {
-            const functionCalls = response.functionCalls();
-            if (!functionCalls) break;
+        if (modelTag.toLowerCase().includes('qwen') || modelTag.toLowerCase().includes('gpt')) {
+            // -- OPENAI COMPATIBLE EXECUTION (Qwen-Plus) --
+            const openaiTools = tools.map(t => ({
+                type: "function" as const,
+                function: {
+                    name: t.name,
+                    description: t.description,
+                    parameters: t.parameters as unknown as Record<string, unknown>
+                }
+            }));
 
-            const functionResponses = [];
+            const messages: any[] = [
+                { role: "system", content: systemPrompt }
+            ];
 
-            for (const call of functionCalls) {
-                const name = call.name;
-                const args = call.args as any;
+            // Map DB history to OpenAI format
+            if (dbMessages && dbMessages.length > 0) {
+                for (const msg of dbMessages) {
+                    messages.push({
+                        role: msg.role === 'assistant' ? 'assistant' : 'user',
+                        content: msg.content
+                    });
+                }
+            }
+            const promptContext = projectName ? `[Project Context: ${projectName}]\n${query}` : query;
+            messages.push({ role: "user", content: promptContext });
 
-                // Emit Tool Event to frontend
-                emitEvent({ type: 'tool', name, args });
-                executedTools.push({ name, args });
+            let loopCount = 0;
+            while (loopCount < 10) {
+                loopCount++;
+                const completion = await openai.chat.completions.create({
+                    model: modelTag,
+                    messages: messages,
+                    tools: openaiTools,
+                    tool_choice: "auto"
+                });
 
-                let toolResult: any;
+                const msg = completion.choices[0].message;
+                messages.push(msg);
 
-                try {
-                    if (name === "retrieve_knowledge") {
-                        toolResult = await retrieveKnowledge(args, domainId);
-                    } else if (name === "check_conflict") {
-                        toolResult = await checkConflict(args);
-                    } else if (name === "withdraw_skill") {
-                        toolResult = await withdrawSkill(args);
-                    } else if (name === "update_knowledge") {
-                        toolResult = updateKnowledge(args);
-                    } else if (name === "get_knowledge") {
-                        toolResult = { content: loadKnowledge() };
-                    } else {
-                        toolResult = { error: `Unknown tool: ${name}` };
-                    }
-                } catch (e: any) {
-                    console.error("Tool execution error:", e);
-                    toolResult = { error: `Tool execution failed: ${e.message}` };
+                if (!msg.tool_calls || msg.tool_calls.length === 0) {
+                    finalText = msg.content || "";
+                    break;
                 }
 
-                functionResponses.push({
-                    functionResponse: {
-                        name: name,
-                        response: toolResult
+                for (const call of msg.tool_calls) {
+                    const fcall = (call as any).function;
+                    const name = fcall.name;
+                    const args = JSON.parse(fcall.arguments || "{}");
+
+                    emitEvent({ type: 'tool', name, args });
+                    executedTools.push({ name, args });
+
+                    let toolResult: any;
+                    try {
+                        if (name === "retrieve_knowledge") {
+                            toolResult = await retrieveKnowledge({ ...args, projectName }, domainId);
+                        } else if (name === "check_conflict") {
+                            toolResult = await checkConflict(args);
+                        } else if (name === "withdraw_skill") {
+                            toolResult = await withdrawSkill(args);
+                        } else if (name === "update_knowledge") {
+                            toolResult = updateKnowledge(args);
+                        } else if (name === "get_knowledge") {
+                            toolResult = { content: loadKnowledge() };
+                        } else if (name === "review_taxonomy_queue") {
+                            toolResult = await reviewTaxonomyQueue(args, domainId);
+                        } else {
+                            toolResult = { error: `Unknown tool: ${name}` };
+                        }
+                    } catch (e: any) {
+                        console.error("Tool execution error:", e);
+                        toolResult = { error: `Tool execution failed: ${e.message}` };
                     }
-                });
+
+                    messages.push({
+                        role: "tool",
+                        tool_call_id: call.id,
+                        name: name,
+                        content: JSON.stringify(toolResult)
+                    });
+                }
             }
 
-            // Send tool results back to the model
-            result = await chat.sendMessage(functionResponses);
-            response = result.response;
+        } else {
+            // -- GEMINI NATIVE EXECUTION --
+            const model = genAI.getGenerativeModel({
+                model: "gemini-3-flash-preview",
+                tools: [{ functionDeclarations: tools }],
+            });
+
+            // Initialize chat history with system prompt
+            const formattedHistory = [
+                {
+                    role: "user",
+                    parts: [{ text: systemPrompt }]
+                },
+                {
+                    role: "model",
+                    parts: [{ text: "Understood. I will always Retrieve, Reason, then Act. Ready to assist." }]
+                }
+            ];
+
+            // Format db history format to Gemini history format
+            if (dbMessages && dbMessages.length > 0) {
+                for (const msg of dbMessages) {
+                    formattedHistory.push({
+                        role: msg.role === 'assistant' ? 'model' : 'user',
+                        parts: [{ text: msg.content }]
+                    });
+                }
+            }
+
+            const chat = model.startChat({ history: formattedHistory as any });
+
+            const promptContext = projectName ? `[Project Context: ${projectName}]\n${query}` : query;
+            let result = await chat.sendMessage(promptContext);
+            let response = result.response;
+
+            // ReAct Loop for Tool Calling
+            while (response.functionCalls()) {
+                const functionCalls = response.functionCalls();
+                if (!functionCalls) break;
+
+                const functionResponses = [];
+
+                for (const call of functionCalls) {
+                    const name = call.name;
+                    const args = call.args as any;
+
+                    // Emit Tool Event to frontend
+                    emitEvent({ type: 'tool', name, args });
+                    executedTools.push({ name, args });
+
+                    let toolResult: any;
+
+                    try {
+                        if (name === "retrieve_knowledge") {
+                            toolResult = await retrieveKnowledge({ ...args, projectName }, domainId);
+                        } else if (name === "check_conflict") {
+                            toolResult = await checkConflict(args);
+                        } else if (name === "withdraw_skill") {
+                            toolResult = await withdrawSkill(args);
+                        } else if (name === "update_knowledge") {
+                            toolResult = updateKnowledge(args);
+                        } else if (name === "get_knowledge") {
+                            toolResult = { content: loadKnowledge() };
+                        } else if (name === "review_taxonomy_queue") {
+                            toolResult = await reviewTaxonomyQueue(args, domainId);
+                        } else {
+                            toolResult = { error: `Unknown tool: ${name}` };
+                        }
+                    } catch (e: any) {
+                        console.error("Tool execution error:", e);
+                        toolResult = { error: `Tool execution failed: ${e.message}` };
+                    }
+
+                    functionResponses.push({
+                        functionResponse: {
+                            name: name,
+                            response: toolResult
+                        }
+                    });
+                }
+
+                // Send tool results back to the model
+                result = await chat.sendMessage(functionResponses);
+                response = result.response;
+            }
+            finalText = response.text();
         }
 
-        const finalText = response.text();
         emitEvent({ type: 'text', text: finalText });
 
         // Asynchronously save Assistant Message and tools to DB
@@ -367,6 +497,150 @@ app.post('/chat', async (req, res) => {
     emitEvent({ type: 'done' });
     emitEvent('[DONE]');
     res.end();
+});
+
+// --- PI-INSPIRED INGESTION AGENT ---
+app.post('/ingest-chunk', async (req, res) => {
+    const { text, domainId, source, projectName, provider } = req.body;
+    const modelTag = provider || "gemini-3-flash-preview";
+
+    if (!text || !domainId) {
+        return res.status(400).json({ error: 'text and domainId are required.' });
+    }
+
+    try {
+        const systemPrompt = `You are a Minimal Ingestion Agent. Your task is to process the following raw text chunk and integrate its core entities into the Neo4j knowledge graph according to the overarching Taxonomy.
+Rules:
+1. You MUST first use the 'get_taxonomy' tool to understand the valid categories for this domain. This tool returns absolute hierarchical paths (e.g., 'Root > Parent > Child').
+2. If the text clearly belongs to an existing category, extract the entities and relationships, and use the 'write_subgraph' tool to link them to that specific category.
+3. If the text introduces novel concepts that DO NOT remotely fit existing taxonomy categories, you MUST use the 'propose_new_category' tool to formally request a new category, which returns a suggestionId. Then use 'write_subgraph' to link your extracted entities to that suggestionId.
+4. IMPORTANT: Any proposed category path MUST be an absolute path starting from an existing ROOT category (e.g., '票据业务 > 新分类'). DO NOT propose a partial path without its parent roots.
+
+Raw Text Chunk:
+${text}
+`;
+
+        if (modelTag.toLowerCase().includes('qwen') || modelTag.toLowerCase().includes('gpt')) {
+            // -- OPENAI COMPATIBLE EXECUTION (Qwen-Plus) --
+            const openaiTools = tools.map(t => ({
+                type: "function" as const,
+                function: {
+                    name: t.name,
+                    description: t.description,
+                    parameters: t.parameters as unknown as Record<string, unknown>
+                }
+            }));
+
+            const messages: any[] = [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: "Begin extraction process." }
+            ];
+
+            let loopCount = 0;
+            let finalOutput = "";
+
+            while (loopCount < 5) {
+                loopCount++;
+                const completion = await openai.chat.completions.create({
+                    model: modelTag,
+                    messages: messages,
+                    tools: openaiTools,
+                    tool_choice: "auto"
+                });
+
+                const msg = completion.choices[0].message;
+                messages.push(msg);
+
+                if (!msg.tool_calls || msg.tool_calls.length === 0) {
+                    finalOutput = msg.content || "";
+                    break;
+                }
+
+                for (const call of msg.tool_calls) {
+                    const fcall = (call as any).function;
+                    console.log(`[Ingestion Agent - Qwen] Calling Tool: ${fcall.name}`);
+                    let toolResult: any = {};
+                    try {
+                        const args = JSON.parse(fcall.arguments || "{}");
+                        if (fcall.name === 'get_taxonomy') {
+                            toolResult = await getTaxonomy({ domainId });
+                        } else if (fcall.name === 'propose_new_category') {
+                            toolResult = await proposeNewCategory({ ...args, domainId });
+                        } else if (fcall.name === 'write_subgraph') {
+                            toolResult = await writeSubgraph({ ...args, domainId, sourceDocument: source, projectName, extractedBy: modelTag });
+                        } else {
+                            toolResult = { error: `Unknown tool for ingestion: ${fcall.name}` };
+                        }
+                    } catch (e: any) {
+                        toolResult = { error: e.message };
+                    }
+
+                    messages.push({
+                        role: "tool",
+                        tool_call_id: call.id,
+                        name: fcall.name,
+                        content: JSON.stringify(toolResult)
+                    });
+                }
+            }
+            res.json({ status: "success", cycles: loopCount, finalAgentText: finalOutput });
+
+        } else {
+            // -- GEMINI NATIVE EXECUTION --
+            const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" }, { apiVersion: "v1beta" });
+            const chatSession = model.startChat({
+                tools: [{ functionDeclarations: tools }]
+            });
+
+            let result = await chatSession.sendMessage([{ text: systemPrompt }]);
+            let response = result.response;
+            let loopCount = 0;
+
+            // ReAct loop
+            while (response.functionCalls() && loopCount < 5) {
+                loopCount++;
+                const functionCalls = response.functionCalls();
+                if (!functionCalls) break;
+
+                const functionResponses = [];
+
+                for (const call of functionCalls) {
+                    console.log(`[Ingestion Agent - Gemini] Calling Tool: ${call.name}`);
+                    let toolResult: any = {};
+                    try {
+                        const args = call.args as any;
+                        if (call.name === 'get_taxonomy') {
+                            toolResult = await getTaxonomy({ domainId });
+                        } else if (call.name === 'propose_new_category') {
+                            toolResult = await proposeNewCategory({ ...args, domainId });
+                        } else if (call.name === 'write_subgraph') {
+                            toolResult = await writeSubgraph({ ...args, domainId, sourceDocument: source, projectName, extractedBy: modelTag });
+                        } else {
+                            toolResult = { error: `Unknown tool for ingestion: ${call.name}` };
+                        }
+                    } catch (e: any) {
+                        toolResult = { error: e.message };
+                    }
+
+                    functionResponses.push({
+                        functionResponse: {
+                            name: call.name,
+                            response: toolResult
+                        }
+                    });
+                }
+
+                result = await chatSession.sendMessage(functionResponses);
+                response = result.response;
+            }
+
+            res.json({ status: "success", cycles: loopCount, finalAgentText: response.text() });
+        }
+
+    } catch (e: any) {
+        console.error("Ingestion agent error:", e);
+        res.status(500).json({ error: e.message });
+    }
 });
 
 app.listen(PORT, () => {
