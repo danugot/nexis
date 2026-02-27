@@ -23,3 +23,9 @@ Enterprise PRDs contain complex screenshots, flowcharts, and merged layout table
 Knowledge in PRDs is highly iterative and frequently deprecated.
 - **Knowledge Lifecycle & Deprecation**: Implement mechanics to gracefully handle old vs. new document versions, ensuring V1.1 knowledge actively overwrites or deprecates V1.0 knowledge in the RAG retrieval pipeline without creating self-contradictory hallucinations.
 - **Precision Citation Highlighting**: When the Chat replies with `[Source: XXX.docx]`, users can open a split right-panel PDF/Word viewer that automatically scrolls to and highlights the exact originating paragraph or page. "Every word is grounded."
+
+## 🚀 Direction 5: The PM Copilot Pipeline (需求孵化与架构沙盘)
+This targets the core daily workflow of a Product Manager/Business Architect. Instead of just querying "what is," the system answers "what if."
+- **Feasibility Sandbox (架构沙盘演练)**: When a PM submits a "New Idea" (e.g., "I want to add a third-party guarantor role to the commercial draft flow"), Nexis actively pulls the entire current workflow graph. It then runs a simulation to identify missing fields, broken logic links, and conflicting legacy rules.
+- **Draft PRD & High-Level Design Generation**: If the idea is logically sound (or after Nexis suggests the necessary architectural patches), the system auto-generates a standardized Draft PRD. This draft will already contain the precise system paths, affected API interfaces, and UI modifications required, acting as a direct bridge between business intent and technical execution.
+- **Value**: Transforms the knowledge base from a passive dictionary into an active "co-founder/architect," drastically reducing the time spent on requirement analysis and risk assessment.
