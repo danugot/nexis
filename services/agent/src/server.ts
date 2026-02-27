@@ -33,7 +33,7 @@ if (!API_KEY) {
 
 const genAI = new GoogleGenerativeAI(API_KEY);
 const openai = new OpenAI({
-    apiKey: process.env.DASHSCOPE_API_KEY || process.env.OPENAI_API_KEY,
+    apiKey: process.env.DASHSCOPE_API_KEY || process.env.OPENAI_API_KEY || "dummy-key-to-prevent-boot-crash",
     baseURL: process.env.OPENAI_BASE_URL || "https://dashscope.aliyuncs.com/compatible-mode/v1"
 });
 
@@ -382,12 +382,18 @@ If the user is PROPOSING a new feature or ASKING for a DRAFT PRD based on a new 
             let loopCount = 0;
             while (loopCount < 10) {
                 loopCount++;
-                const completion = await openai.chat.completions.create({
-                    model: modelTag,
-                    messages: messages,
-                    tools: openaiTools,
-                    tool_choice: "auto"
-                });
+                let completion: any;
+                try {
+                    completion = await openai.chat.completions.create({
+                        model: modelTag,
+                        messages: messages,
+                        tools: openaiTools,
+                        tool_choice: "auto"
+                    });
+                } catch (completionError: any) {
+                    console.error("OpenAI/Qwen API Rejection Error:", completionError.message, JSON.stringify(completionError, null, 2));
+                    throw new Error(`OpenAI API Error: ${completionError.message}`);
+                }
 
                 const msg = completion.choices[0].message;
                 messages.push(msg);
@@ -476,7 +482,9 @@ If the user is PROPOSING a new feature or ASKING for a DRAFT PRD based on a new 
             let response = result.response;
 
             // ReAct Loop for Tool Calling
-            while (response.functionCalls()) {
+            let geminiLoopCount = 0;
+            while (response.functionCalls() && geminiLoopCount < 10) {
+                geminiLoopCount++;
                 const functionCalls = response.functionCalls();
                 if (!functionCalls) break;
 
@@ -520,14 +528,20 @@ If the user is PROPOSING a new feature or ASKING for a DRAFT PRD based on a new 
                     functionResponses.push({
                         functionResponse: {
                             name: name,
-                            response: toolResult
+                            response: typeof toolResult === "object" ? toolResult : { result: toolResult }
                         }
                     });
                 }
 
                 // Send tool results back to the model
-                result = await chat.sendMessage(functionResponses);
-                response = result.response;
+                console.log(`[Gemini Loop] Sending back ${functionResponses.length} function responses`);
+                try {
+                    result = await chat.sendMessage(functionResponses);
+                    response = result.response;
+                } catch (err: any) {
+                    console.error("Gemini context send error:", err);
+                    break;
+                }
             }
             finalText = response.text();
         }

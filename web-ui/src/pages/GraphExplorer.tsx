@@ -6,6 +6,7 @@ import { RefreshCw, ZoomIn, ZoomOut, Maximize, Search } from 'lucide-react';
 import { Input } from "@/components/ui/input";
 import axios from 'axios';
 import { useGlobalDomain } from '../contexts/GlobalDomainContext';
+import { getApiBaseUrl } from '../config';
 
 interface Node {
     id: string;
@@ -55,7 +56,7 @@ export default function GraphExplorer() {
                 params.append('exclude_types', 'Person/Role');
             }
 
-            const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/graph/visualize?${params.toString()}`);
+            const response = await axios.get(`${getApiBaseUrl()}/graph/visualize?${params.toString()}`);
             setData(response.data);
 
             // Auto fit after a short delay to allow graph placement
@@ -190,7 +191,7 @@ export default function GraphExplorer() {
                                     if (!showPersons) {
                                         params.append('exclude_types', 'Person/Role');
                                     }
-                                    const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/graph/visualize?${params.toString()}`);
+                                    const response = await axios.get(`${getApiBaseUrl()}/graph/visualize?${params.toString()}`);
                                     const newData = response.data;
 
                                     setData(prev => {

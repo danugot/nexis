@@ -12,7 +12,8 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001';
+import { getApiBaseUrl } from '../config';
+const API_BASE_URL = getApiBaseUrl();
 
 interface LayoutProps {
     children: React.ReactNode;

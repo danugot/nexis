@@ -1,5 +1,6 @@
-FROM node:18-alpine
-
+FROM alpine:latest
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories && \
+    apk add --no-cache nodejs npm
 WORKDIR /app
 
 # Copy package files first for caching

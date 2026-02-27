@@ -3,99 +3,48 @@ RAG Server connected to ChromaDB at localhost:8000
 RAG Server connected to Neo4j at bolt://localhost:7687
 RAG API connecting to Redis at localhost:6380
 RAG Server connected to Gemini API
-INFO:     Started server process [74001]
+INFO:     Started server process [74771]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
-INFO:     127.0.0.1:56057 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56061 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56058 - "GET /domains HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56064 - "GET /domains HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56067 - "GET /domains/f2bace5a-1c81-4f01-8236-937e54866e90/suggestions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56068 - "GET /domains/f2bace5a-1c81-4f01-8236-937e54866e90/taxonomy HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56079 - "GET /domains HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56098 - "GET /domains HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56236 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56239 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56237 - "GET /domains HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56241 - "GET /domains HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56244 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/taxonomy HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56245 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/suggestions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56250 - "GET /domains/f2bace5a-1c81-4f01-8236-937e54866e90/taxonomy HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56251 - "GET /domains/f2bace5a-1c81-4f01-8236-937e54866e90/suggestions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56256 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/taxonomy HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56257 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/suggestions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56260 - "GET /graph/visualize?limit=500&domain_id=29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e&exclude_types=Person%2FRole HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56264 - "GET /graph/visualize?limit=500&domain_id=29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e&exclude_types=Person%2FRole HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56267 - "GET /documents HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56270 - "GET /documents HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56275 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/taxonomy HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56276 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/suggestions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56433 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56435 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56432 - "GET /domains HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56439 - "GET /domains HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56478 - "GET /documents HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56481 - "GET /documents HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56499 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56500 - "GET /domains HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56504 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56505 - "GET /domains HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56608 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56612 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56609 - "GET /domains HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56614 - "GET /domains HTTP/1.1" 200 OK
-Building prefix dict from the default dictionary ...
-Loading model from cache /var/folders/fl/8n6sppwn3p39jd875rvvrxz40000gn/T/jieba.cache
-Loading model cost 0.194 seconds.
-Prefix dict has been built successfully.
-Graph query for '供票' found 10 facts.
-Graph query for '银行' found 22 facts.
-Graph query for '账户' found 24 facts.
-Graph query for '支持' found 2 facts.
-Graph query for '种类' found 8 facts.
-INFO:     127.0.0.1:56641 - "POST /retrieve HTTP/1.1" 200 OK
-Graph query for '供票' found 10 facts.
-Graph query for '支持' found 2 facts.
-Graph query for '银行' found 22 facts.
-Graph query for '列表' found 8 facts.
-INFO:     127.0.0.1:56641 - "POST /retrieve HTTP/1.1" 200 OK
-Graph query for '供票' found 10 facts.
-Graph query for '支持' found 2 facts.
-Graph query for '银行' found 22 facts.
-Graph query for '账户' found 24 facts.
-Graph query for '账户' found 24 facts.
-Graph query for '类型' found 10 facts.
-Graph query for '银行' found 22 facts.
-Graph query for '列表' found 8 facts.
-INFO:     127.0.0.1:56641 - "POST /retrieve HTTP/1.1" 200 OK
-Graph query for '供应链' found 9 facts.
-Graph query for '票据' found 24 facts.
-Graph query for '供票' found 10 facts.
-Graph query for '支持' found 2 facts.
-Graph query for '银行' found 22 facts.
-Graph query for '账户' found 24 facts.
-Graph query for '类型' found 10 facts.
-Graph query for '结算' found 4 facts.
-Graph query for '账户' found 24 facts.
-INFO:     127.0.0.1:56641 - "POST /retrieve HTTP/1.1" 200 OK
-Graph query for '供票' found 10 facts.
-Graph query for '结算' found 4 facts.
-Graph query for '账户' found 24 facts.
-Graph query for '要求' found 0 facts.
-Graph query for '支持' found 2 facts.
-Graph query for '银行' found 22 facts.
-Graph query for '列表' found 8 facts.
-INFO:     127.0.0.1:56641 - "POST /retrieve HTTP/1.1" 200 OK
-Graph query for '供票' found 10 facts.
-Graph query for '平台' found 7 facts.
-Graph query for '支持' found 2 facts.
-Graph query for '银行' found 22 facts.
-Graph query for '账户' found 24 facts.
-Graph query for '绑定' found 1 facts.
-Graph query for '规则' found 8 facts.
-INFO:     127.0.0.1:56641 - "POST /retrieve HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56798 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56802 - "GET /settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56799 - "GET /domains HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56804 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60361 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60360 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60368 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60371 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60367 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60377 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60369 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60362 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60381 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60384 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60389 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60388 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60390 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60393 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60414 - "GET /documents/%E3%80%90%E4%BA%A7%E5%93%81%E9%9C%80%E6%B1%82%E8%A7%84%E6%A0%BC%E8%AF%B4%E6%98%8E%E4%B9%A6%E3%80%91%E4%BE%9B%E5%BA%94%E9%93%BE%E7%A5%A8%E6%8D%AE20221227.docx/trace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60428 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/suggestions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60426 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/taxonomy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60430 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60432 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60434 - "GET /graph/visualize?limit=500&domain_id=29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60436 - "GET /graph/visualize?limit=500&domain_id=29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60438 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60449 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60473 - "GET /graph/visualize?limit=500&domain_id=29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60475 - "GET /graph/visualize?limit=500&domain_id=29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e&exclude_types=Person%2FRole HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60477 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60479 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60485 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/suggestions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60484 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/taxonomy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60488 - "GET /domains/f2bace5a-1c81-4f01-8236-937e54866e90/taxonomy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60489 - "GET /domains/f2bace5a-1c81-4f01-8236-937e54866e90/suggestions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60493 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/taxonomy HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60492 - "GET /domains/29f5d50f-0ad3-46d4-8d82-85dc6fa0e57e/suggestions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60533 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60535 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60539 - "GET /settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60542 - "GET /domains HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60637 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60639 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60641 - "GET /documents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60643 - "GET /documents/%E3%80%90%E4%BA%A7%E5%93%81%E9%9C%80%E6%B1%82%E8%A7%84%E6%A0%BC%E8%AF%B4%E6%98%8E%E4%B9%A6%E3%80%91%E4%BE%9B%E5%BA%94%E9%93%BE%E7%A5%A8%E6%8D%AE20221227.docx/trace HTTP/1.1" 200 OK

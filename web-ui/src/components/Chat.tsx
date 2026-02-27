@@ -3,8 +3,9 @@ import { useState, useRef, useEffect } from 'react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
-import { MessageSquare, Plus, Trash2, Search } from "lucide-react"
+import { Search, Trash2, Plus, MessageSquare } from "lucide-react"
 import { useGlobalDomain } from '../contexts/GlobalDomainContext'
+import { getAgentApiUrl } from '../config';
 
 export default function Chat() {
     const { activeDomain } = useGlobalDomain();
@@ -19,7 +20,7 @@ export default function Chat() {
     const messagesEndRef = useRef<HTMLDivElement>(null)
 
     // Ensure we are talking to the Agent API
-    const agentUrl = '/agent';
+    const agentUrl = getAgentApiUrl();
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })

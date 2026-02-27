@@ -11,6 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { FileText, Search, Share2, Layers, AlertCircle } from "lucide-react";
 import axios from "axios";
+import { getApiBaseUrl } from "../config";
 
 interface TraceData {
     markdown_content: string | null;
@@ -44,7 +45,7 @@ export function DocumentTraceSheet({ isOpen, onClose, document }: DocumentTraceS
         setError(null);
         try {
             const encodedFilename = encodeURIComponent(filename);
-            const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/documents/${encodedFilename}/trace`);
+            const response = await axios.get(`${getApiBaseUrl()}/documents/${encodedFilename}/trace`);
             setTraceData(response.data);
         } catch (err: any) {
             console.error("Failed to load trace data:", err);

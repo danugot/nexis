@@ -6,7 +6,8 @@ import { Plus, Trash2, Folder, Network, Building2, ChevronRight, ChevronDown, Ed
 import { useGlobalDomain, type Domain } from '../contexts/GlobalDomainContext';
 import { Badge } from '@/components/ui/badge';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001';
+import { getApiBaseUrl } from '../config';
+const API_BASE_URL = getApiBaseUrl();
 
 interface TaxonomyNode {
     id: string;

@@ -21,8 +21,10 @@ export interface RetrieveKnowledgeResult {
 export async function retrieveKnowledge(input: RetrieveKnowledgeInput, domainId?: string): Promise<RetrieveKnowledgeResult> {
     const { query, n_results = 5, projectName } = input;
 
+    const RAG_API_URL = process.env.RAG_API_URL || "http://rag_api:8000";
+
     try {
-        const response = await fetch("http://localhost:8001/retrieve", {
+        const response = await fetch(`${RAG_API_URL}/retrieve`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({

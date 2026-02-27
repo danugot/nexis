@@ -38,7 +38,7 @@ NEO4J_USER = os.getenv('NEO4J_USER', 'neo4j')
 NEO4J_PASSWORD = os.getenv('NEO4J_PASSWORD', 'nexis_password')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 QUEUE_NAME = 'nexis:ingest:queue'
-KNOWLEDGE_DIR = 'knowledge'
+KNOWLEDGE_DIR = os.getenv('KNOWLEDGE_DIR', '/app/processed_docs')
 
 # Load Taxonomy dynamically per domain in extract_and_ingest_graph
 # Initialize Clients
@@ -193,7 +193,7 @@ def ingest_to_vector_db(filename, content, domain_id=None, project_name=None):
     except Exception as e:
         print(f"Error ingesting to ChromaDB: {e}")
 
-def extract_and_ingest_graph(filename, content, domain_id=None):
+def extract_and_ingest_graph(filename, content, domain_id=None, project_name=None):
     if not neo4j_driver or not client:
         return
 
@@ -425,7 +425,7 @@ def process_file(file_path, document_id=None, project_name=None):
         print(f"Converted to {output_path} using local extractors")
 
         ingest_to_vector_db(filename, md_content, domain_id, project_name)
-        extract_and_ingest_graph(filename, md_content, domain_id)
+        extract_and_ingest_graph(filename, md_content, domain_id, project_name)
 
         if document_id:
             doc = db.query(Document).filter(Document.id == document_id).first()

@@ -528,9 +528,8 @@ async def get_document_trace(filename: str):
     
     # 1. Fetch Markdown Content
     name, _ = os.path.splitext(filename)
-    # The worker saves to services/worker/knowledge/
-    worker_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "worker")
-    kb_path = os.path.join(worker_dir, "knowledge", f"{name}.md")
+    # The worker saves to processed_docs/
+    kb_path = os.path.join("/app/processed_docs", f"{name}.md")
     if os.path.exists(kb_path):
         with open(kb_path, 'r', encoding='utf-8') as f:
             trace_data["markdown_content"] = f.read()
@@ -731,7 +730,7 @@ async def get_graph_visualization(limit: int = 300, search_query: str = None, ex
                     # Specific node expansion - exact 1 hop
                     query = f"""
                     MATCH (n)
-                    WHERE elementId(n) = $expand_node_id OR str(id(n)) = $expand_node_id
+                    WHERE elementId(n) = $expand_node_id OR toString(id(n)) = $expand_node_id
                     {domain_match}
                     MATCH (n)-[r]-(m)
                     RETURN n as s, r, m as t
@@ -899,6 +898,8 @@ async def ingest_subgraph(req: SubgraphIngestRequest):
             
             # 4. Create Edges
             for edge in req.relationships:
+                if "source" not in edge or "target" not in edge or "type" not in edge:
+                    continue
                 session.run(
                     """
                     MATCH (a:Entity {name: $source}), (b:Entity {name: $target})

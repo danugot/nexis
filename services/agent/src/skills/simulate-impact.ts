@@ -49,9 +49,11 @@ const openai = new OpenAI({
     baseURL: process.env.OPENAI_BASE_URL || "https://dashscope.aliyuncs.com/compatible-mode/v1"
 });
 
+const RAG_API_URL = process.env.RAG_API_URL || "http://rag_api:8000";
+
 async function queryRAG(query: string, projectName?: string): Promise<string> {
     try {
-        const response = await fetch("http://localhost:8001/retrieve", {
+        const response = await fetch(`${RAG_API_URL}/retrieve`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -78,7 +80,7 @@ async function queryRAG(query: string, projectName?: string): Promise<string> {
 
 async function getProvider(): Promise<string> {
     try {
-        const res = await fetch("http://localhost:8001/api/settings");
+        const res = await fetch(`${RAG_API_URL}/api/settings`);
         if (res.ok) {
             const data = await res.json();
             return data.llm_provider || "gemini";
