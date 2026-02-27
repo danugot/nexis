@@ -77,7 +77,7 @@ class DomainCreate(BaseModel):
 
 @app.get("/domains")
 def get_domains(db: Session = Depends(get_db)):
-    domains = db.query(Domain).all()
+    domains = db.query(Domain).order_by(Domain.createdAt.asc()).all()
     return [{"id": d.id, "name": d.name, "description": d.description} for d in domains]
 
 @app.post("/domains")
