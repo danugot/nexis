@@ -47,7 +47,12 @@ export default function Layout({ children }: LayoutProps) {
         fetch(`${API_BASE_URL}/settings`)
             .then(res => res.json())
             .then(data => {
-                if (data.llm_provider) setProvider(data.llm_provider);
+                // Force qwen-plus if the provider is gemini or null
+                if (!data.llm_provider || data.llm_provider === 'gemini') {
+                    setProvider('qwen-plus');
+                } else {
+                    setProvider(data.llm_provider);
+                }
             })
             .catch(console.error);
     }, [settingsOpen]);

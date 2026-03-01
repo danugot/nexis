@@ -63,9 +63,9 @@ class SettingsUpdate(BaseModel):
 @app.get("/settings")
 async def get_settings():
     if not redis_client:
-        return {"llm_provider": "gemini"}
+        return {"llm_provider": "qwen-plus"}
     provider = redis_client.get("nexis:settings:llm_provider")
-    return {"llm_provider": provider if provider else "gemini"}
+    return {"llm_provider": provider if provider else "qwen-plus"}
 
 @app.put("/settings")
 async def update_settings(req: SettingsUpdate):
