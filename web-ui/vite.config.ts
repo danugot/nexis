@@ -12,14 +12,15 @@ export default defineConfig({
   },
   server: {
     host: true,
+    allowedHosts: ["nexis.ahagoing.cc"],
     proxy: {
       '/api': {
-        target: 'http://localhost:8001',
+        target: 'http://rag_api:8000',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '')
       },
       '/agent': {
-        target: 'http://localhost:8002',
+        target: 'http://agent_api:8002',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/agent/, '')
       }

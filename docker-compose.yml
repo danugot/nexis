@@ -124,9 +124,9 @@ services:
     ports:
       - "5173:5173"
     environment:
-      # These must be localhost because the browser connects to them from the user's host machine
-      - VITE_API_BASE_URL=http://localhost:8001
-      - VITE_AGENT_API_URL=http://localhost:8002
+      # These must be relative paths to use the Vite proxy for remote access
+      - VITE_API_BASE_URL=/api
+      - VITE_AGENT_API_URL=/agent
     volumes:
       - ./web-ui:/app
       - /app/node_modules
