@@ -41,7 +41,7 @@ const NavItem = ({ to, icon: Icon, label }: { to: string; icon: any; label: stri
 
 export default function Layout({ children }: LayoutProps) {
     const [settingsOpen, setSettingsOpen] = useState(false);
-    const [provider, setProvider] = useState<string>('gemini');
+    const [provider, setProvider] = useState<string>('qwen-plus');
 
     useEffect(() => {
         fetch(`${API_BASE_URL}/settings`)
@@ -53,6 +53,7 @@ export default function Layout({ children }: LayoutProps) {
     }, [settingsOpen]);
 
     const handleSaveSettings = async (selected: string) => {
+        if (selected === 'gemini') return; // Prevent selection
         setProvider(selected);
         try {
             await fetch(`${API_BASE_URL}/settings`, {
@@ -99,17 +100,17 @@ export default function Layout({ children }: LayoutProps) {
                             <DialogHeader>
                                 <DialogTitle>Global AI Settings</DialogTitle>
                                 <DialogDescription>
-                                    Select the underlying Large Language Model engine. This affects conflict detection, graph extraction, and smart chat.
+                                    Qwen is the mandatory reasoning engine for this deployment.
                                 </DialogDescription>
                             </DialogHeader>
                             <div className="flex flex-col gap-3 py-4">
                                 <button
-                                    onClick={() => handleSaveSettings('gemini')}
-                                    className={cn("flex items-center justify-between p-4 border rounded-lg transition-colors text-left", provider === 'gemini' ? 'border-primary ring-1 ring-primary bg-primary/5' : 'hover:bg-slate-50 dark:hover:bg-slate-900')}
+                                    disabled={true}
+                                    className={cn("flex items-center justify-between p-4 border rounded-lg transition-colors text-left opacity-50 grayscale cursor-not-allowed", provider === 'gemini' ? 'border-primary ring-1 ring-primary bg-primary/5' : 'hover:bg-slate-50 dark:hover:bg-slate-900')}
                                 >
                                     <div>
                                         <h4 className="font-semibold text-sm">Google Gemini</h4>
-                                        <p className="text-xs text-muted-foreground mt-1">gemini-3-flash-preview. Fast, multi-modal. Default.</p>
+                                        <p className="text-xs text-muted-foreground mt-1">Temporarily disabled to ensure consistency across the knowledge graph.</p>
                                     </div>
                                     {provider === 'gemini' && <Check className="h-4 w-4 text-primary" />}
                                 </button>

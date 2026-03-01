@@ -26,6 +26,8 @@ export default function AdminPage() {
     // AI Suggestions State
     const [suggestions, setSuggestions] = useState<any[]>([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
+    const [editingSuggestionId, setEditingSuggestionId] = useState<string | null>(null);
+    const [editingPath, setEditingPath] = useState('');
 
     const [newDomainName, setNewDomainName] = useState('');
     const [newRootNodeName, setNewRootNodeName] = useState('');
@@ -143,6 +145,21 @@ export default function AdminPage() {
         }
     };
 
+    const handleSaveFineTune = async (suggestionId: string) => {
+        if (!selectedDomain || !editingPath.trim()) return;
+        try {
+            await fetch(`${API_BASE_URL}/domains/${selectedDomain.id}/suggestions/${suggestionId}/fine-tune`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ proposedPath: editingPath })
+            });
+            setEditingSuggestionId(null);
+            fetchTaxonomy(selectedDomain.id, true);
+        } catch (e) {
+            console.error("Failed to fine-tune suggestion", e);
+        }
+    };
+
     const rootNodes = taxonomy.filter(n => !n.parentId);
 
     return (
@@ -256,15 +273,49 @@ export default function AdminPage() {
                                         {suggestions.map((sugg) => (
                                             <div key={sugg.id} className="p-4 border border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20 rounded-lg flex flex-col gap-3">
                                                 <div className="flex justify-between items-start">
-                                                    <div>
+                                                    <div className="flex-1 mr-4">
                                                         <div className="text-xs font-semibold text-amber-600 dark:text-amber-500 mb-1">PROPOSED CATEGORY PATH</div>
-                                                        <div className="font-mono text-sm font-bold">{sugg.proposedPath}</div>
+                                                        {editingSuggestionId === sugg.id ? (
+                                                            <div className="flex items-center gap-2 mt-1">
+                                                                <Input
+                                                                    value={editingPath}
+                                                                    onChange={(e) => setEditingPath(e.target.value)}
+                                                                    onKeyDown={(e) => {
+                                                                        if (e.key === 'Enter') handleSaveFineTune(sugg.id);
+                                                                        if (e.key === 'Escape') setEditingSuggestionId(null);
+                                                                    }}
+                                                                    autoFocus
+                                                                    className="h-8 font-mono text-sm max-w-sm"
+                                                                />
+                                                                <Button size="sm" variant="outline" className="h-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={() => handleSaveFineTune(sugg.id)}>
+                                                                    <Check className="w-4 h-4 mr-1" /> Save
+                                                                </Button>
+                                                                <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive" onClick={() => setEditingSuggestionId(null)}>
+                                                                    <X className="w-4 h-4" />
+                                                                </Button>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="font-mono text-sm font-bold flex items-center group">
+                                                                {sugg.proposedPath}
+                                                                <Button
+                                                                    size="icon"
+                                                                    variant="ghost"
+                                                                    className="w-6 h-6 ml-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                    onClick={() => {
+                                                                        setEditingSuggestionId(sugg.id);
+                                                                        setEditingPath(sugg.proposedPath);
+                                                                    }}
+                                                                >
+                                                                    <Edit2 className="w-3 h-3 text-muted-foreground" />
+                                                                </Button>
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                    <div className="flex gap-2">
-                                                        <Button size="sm" variant="outline" className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={() => handleResolveSuggestion(sugg.id, 'APPROVE', sugg.proposedPath)}>
+                                                    <div className="flex gap-2 shrink-0 mt-1">
+                                                        <Button size="sm" variant="outline" className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={() => handleResolveSuggestion(sugg.id, 'APPROVE', sugg.proposedPath)} disabled={editingSuggestionId === sugg.id}>
                                                             <CheckCircle2 className="w-4 h-4 mr-1" /> Approve
                                                         </Button>
-                                                        <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10" onClick={() => handleResolveSuggestion(sugg.id, 'REJECT')}>
+                                                        <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10" onClick={() => handleResolveSuggestion(sugg.id, 'REJECT')} disabled={editingSuggestionId === sugg.id}>
                                                             <X className="w-4 h-4 mr-1" /> Reject
                                                         </Button>
                                                     </div>

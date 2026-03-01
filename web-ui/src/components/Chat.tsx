@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from 'react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -6,6 +5,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Search, Trash2, Plus, MessageSquare } from "lucide-react"
 import { useGlobalDomain } from '../contexts/GlobalDomainContext'
 import { getAgentApiUrl } from '../config';
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 export default function Chat() {
     const { activeDomain } = useGlobalDomain();
@@ -332,7 +333,11 @@ export default function Chat() {
                                     )}
 
                                     {m.content ? (
-                                        <div className="whitespace-pre-wrap">{m.content}</div>
+                                        <div className={`prose prose-sm dark:prose-invert max-w-none ${m.role === 'user' ? 'prose-p:text-primary-foreground prose-headings:text-primary-foreground text-primary-foreground' : 'text-foreground'}`}>
+                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                                {m.content}
+                                            </ReactMarkdown>
+                                        </div>
                                     ) : (
                                         m.role === 'assistant' && <div className="text-sm text-muted-foreground animate-pulse italic">Formulating response...</div>
                                     )}

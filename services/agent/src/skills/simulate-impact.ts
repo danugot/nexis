@@ -20,7 +20,7 @@ export interface ImpactReport {
 
 export const simulateImpactDeclaration: FunctionDeclaration = {
     name: "simulate_impact",
-    description: "Sandbox Feasibility Tool: Analyzes a Product Manager's proposed new feature against the existing Knowledge Base (Vector + Graph) to identify affected modules, broken rules, and missing fields. ALWAYS use this when the user proposes a new idea or asks for a PRD.",
+    description: "Sandbox Feasibility Tool: Analyzes a Product Manager's proposed new feature, process change, or 'what if' scenario against the existing Knowledge Base (Vector + Graph) to identify affected modules, broken rules, and missing fields. ALWAYS use this when the user asks if something 'can be realized' (可以实现吗), proposes a new idea, or asks for a PRD.",
     parameters: {
         type: SchemaType.OBJECT,
         properties: {
@@ -80,7 +80,7 @@ async function queryRAG(query: string, projectName?: string): Promise<string> {
 
 async function getProvider(): Promise<string> {
     try {
-        const res = await fetch(`${RAG_API_URL}/api/settings`);
+        const res = await fetch(`${RAG_API_URL}/settings`);
         if (res.ok) {
             const data = await res.json();
             return data.llm_provider || "gemini";

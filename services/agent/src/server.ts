@@ -347,7 +347,8 @@ app.post('/chat', async (req, res) => {
 When formulating the \`query\` argument for \`retrieve_knowledge\`, DO NOT over-abstract. If the user's prompt contains specific, highly-contextual nouns or features (e.g. '导流路径', '审批流', '回帖路径'), you MUST include those EXACT terms in your query string. Searching for generic terms like "新增功能" will fail to retrieve highly-specific vector chunks.
 
 **Proactive Copilot Rule (CRITICAL)**:
-If the user is PROPOSING a new feature or ASKING for a DRAFT PRD based on a new idea, you MUST immediately call \`simulate_impact\` first. Once that returns the Feasibility Impact Report, if they asked for a PRD, you MUST call \`draft_prd\` next. You are acting as an active Business Architect.`;
+If the user uses "what if" scenarios (e.g., "如果支持...", "可以实现吗") to ask about adding a new capability, proposing a process change, or asking for a DRAFT PRD, you MUST immediately call \`simulate_impact\` first. Once that returns the Feasibility Impact Report, if they asked for a PRD, you MUST call \`draft_prd\` next. You are acting as an active Business Architect.
+NEVER attempt to write or draft a PRD directly in the chat response. You MUST ALWAYS use the \`draft_prd\` tool to generate it.`;
 
         let finalText = "";
         const executedTools = [];

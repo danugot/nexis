@@ -11,6 +11,9 @@ import uvicorn
 from dotenv import load_dotenv
 import sys
 
+from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
+from openai import OpenAI
+
 # Load .env from project root
 dotenv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), '.env')
 load_dotenv(dotenv_path)
@@ -162,6 +165,42 @@ def get_taxonomy_suggestions(domain_id: str, db: Session = Depends(get_db)):
         "createdAt": s.createdAt.isoformat()
     } for s in suggestions]
 
+class SuggestionFineTuneRequest(BaseModel):
+    proposedPath: str
+
+@app.put("/domains/{domain_id}/suggestions/{suggestion_id}/fine-tune")
+def fine_tune_taxonomy_suggestion(domain_id: str, suggestion_id: str, req: SuggestionFineTuneRequest, db: Session = Depends(get_db)):
+    suggestion = db.query(TaxonomySuggestion).filter(
+        TaxonomySuggestion.id == suggestion_id, 
+        TaxonomySuggestion.domainId == domain_id
+    ).first()
+    
+    if not suggestion:
+        raise HTTPException(status_code=404, detail="Suggestion not found")
+        
+    if suggestion.status != "PENDING":
+        raise HTTPException(status_code=400, detail=f"Cannot fine-tune a {suggestion.status} suggestion")
+
+    # 1. Update Postgres
+    suggestion.proposedPath = req.proposedPath
+    db.commit()
+
+    # 2. Update Neo4j Node Name if it exists
+    if neo4j_driver:
+        try:
+             with neo4j_driver.session() as session:
+                 session.run(
+                     """
+                     MATCH (tx:TaxonomyNode:PendingSuggestion {id: $sugg_id})
+                     SET tx.name = $new_name
+                     """,
+                     sugg_id=suggestion_id, new_name=req.proposedPath
+                 )
+        except Exception as e:
+             print(f"Warning: Failed to sync fine-tuned suggestion name to Neo4j: {e}")
+
+    return {"status": "success", "message": "Suggestion fine-tuned successfully", "proposedPath": suggestion.proposedPath}
+
 class SuggestionResolutionRequest(BaseModel):
     action: str # 'APPROVE' or 'REJECT'
     approvedPath: Optional[str] = None
@@ -287,10 +326,45 @@ def resolve_taxonomy_suggestion(domain_id: str, suggestion_id: str, req: Suggest
     else:
         raise HTTPException(status_code=400, detail="Invalid action")
 
+class DashScopeEmbeddingFunction(EmbeddingFunction):
+    def __init__(self, api_key, model_name="text-embedding-v4"):
+        self.client = OpenAI(
+            api_key=api_key,
+            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
+        )
+        self.model_name = model_name
+
+    def __call__(self, input: Documents) -> Embeddings:
+        if not input:
+            return []
+        
+        # DashScope text-embedding v4 has a strict limit of 10 inputs per request
+        batch_size = 10
+        all_embeddings = []
+        for i in range(0, len(input), batch_size):
+            batch = input[i:i + batch_size]
+            response = self.client.embeddings.create(
+                model=self.model_name,
+                input=batch
+            )
+            all_embeddings.extend([data.embedding for data in response.data])
+            
+        return all_embeddings
+
+dashscope_ef = None
+dashscope_key = os.getenv('DASHSCOPE_API_KEY')
+if dashscope_key:
+    dashscope_ef = DashScopeEmbeddingFunction(api_key=dashscope_key)
+else:
+    print("Warning: DASHSCOPE_API_KEY not set. Falling back to default embeddings.")
+
 # Initialize ChromaDB
 try:
     chroma_client = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT)
-    chroma_collection = chroma_client.get_or_create_collection(name="nexis_knowledge")
+    chroma_collection = chroma_client.get_or_create_collection(
+        name="nexis_knowledge",
+        embedding_function=dashscope_ef
+    )
     print(f"RAG Server connected to ChromaDB at {CHROMA_HOST}:{CHROMA_PORT}")
 except Exception as e:
     print(f"Error connecting to ChromaDB: {e}")
@@ -355,6 +429,19 @@ def query_graph(search_term, domain_id=None, project_name=None):
                 WHERE coalesce(d.status, 'EFFECTIVE') = 'EFFECTIVE' {project_match}
                 RETURN 'Category ' + tx.name + ' contains: ' + coalesce(e.name, 'No entities') + ' [Source: ' + d.name + ']' as fact
                 LIMIT 15
+                
+                UNION
+                
+                // Strategy 3: Multi-hop Relationship Traversal
+                MATCH (e:Entity)
+                WHERE toLower(e.name) CONTAINS toLower($term)
+                MATCH (e)-[r]-(m:Entity)
+                WHERE type(r) <> 'MENTIONED_IN' AND type(r) <> 'BELONGS_TO' AND type(r) <> 'IN_DOMAIN' AND type(r) <> 'CONTRADICTS'
+                MATCH (e)-[:MENTIONED_IN]->(d:Document)
+                WHERE coalesce(d.status, 'EFFECTIVE') = 'EFFECTIVE' {project_match}
+                {domain_match}
+                RETURN e.name + ' [Relation: ' + type(r) + '] ' + m.name + ' [Source: ' + d.name + ']' as fact
+                LIMIT 20
                 """,
                 term=search_term
             )
@@ -414,12 +501,21 @@ async def archive_document(doc_id: str, db: Session = Depends(get_db)):
     if neo4j_driver:
         try:
             with neo4j_driver.session() as session:
+                # 1. Hard delete the document and all relationships pointing to it
                 session.run(
                     """
                     MATCH (d:Document {name: $filename})
-                    SET d.status = 'DELETED'
+                    DETACH DELETE d
                     """,
                     filename=doc.filename
+                )
+                # 2. Sweep for orphaned entities that no longer belong to ANY document
+                session.run(
+                    """
+                    MATCH (e:Entity) 
+                    WHERE NOT (e)-[:MENTIONED_IN]->(:Document) 
+                    DETACH DELETE e
+                    """
                 )
         except Exception as e:
             print(f"Warning: failed to mark DELETED in Neo4j for {doc.filename}: {e}")
@@ -609,7 +705,10 @@ async def retrieve(request: QueryRequest, db: Session = Depends(get_db)):
     if request.domain_id and collection is not None:
         safe_id = request.domain_id.replace('-', '_')
         try:
-            collection = chroma_client.get_or_create_collection(name=f"nexis_{safe_id}")
+            collection = chroma_client.get_or_create_collection(
+                name=f"nexis_{safe_id}",
+                embedding_function=dashscope_ef
+            )
         except Exception:
             pass
 
@@ -775,7 +874,13 @@ async def get_graph_visualization(limit: int = 300, search_query: str = None, ex
                     
                     color = "#888"
                     val = 5
-                    if "TaxonomyNode" in node.labels: color, val = "#f59e0b", 22 # Amber
+                    if "TaxonomyNode" in node.labels: 
+                        if "PendingSuggestion" in node.labels:
+                            color, val = "#f97316", 20 # Orange, slightly smaller than formal amber
+                            # Add a special property to hint frontend it's pending
+                            name = "⏳ " + name 
+                        else:
+                            color, val = "#f59e0b", 22 # Amber
                     elif "Domain" in node.labels: color, val = "#f43f5e", 26 # Rose
                     elif "Document" in node.labels: color, val = "#10b981", 12 # Emerald
                     elif "Entity" in node.labels:
@@ -848,7 +953,7 @@ class SubgraphIngestRequest(BaseModel):
     relationships: list
 
 @app.post("/graph/ingest_subgraph")
-async def ingest_subgraph(req: SubgraphIngestRequest):
+async def ingest_subgraph(req: SubgraphIngestRequest, db: Session = Depends(get_db)):
     if not neo4j_driver:
         raise HTTPException(status_code=500, detail="Neo4j driver not connected")
         
@@ -885,16 +990,29 @@ async def ingest_subgraph(req: SubgraphIngestRequest):
                     filename=req.sourceDocument
                 )
                 
-                # Link to category (whether strict or suggested)
-                # It doesn't matter for Neo4j, we just attach it to an identifier
-                session.run(
-                    """
-                    MATCH (n:Entity {name: $name}) 
-                    MERGE (tx:TaxonomyNode {id: $cat_id})
-                    MERGE (n)-[:BELONGS_TO]->(tx)
-                    """,
-                    name=node["name"], cat_id=req.categoryId
-                )
+                # Check if this categoryId is a Suggestion in Postgres
+                sugg = db.query(TaxonomySuggestion).filter(TaxonomySuggestion.id == req.categoryId).first()
+                if sugg:
+                    session.run(
+                        """
+                        MATCH (n:Entity {name: $name}) 
+                        MERGE (tx:TaxonomyNode:PendingSuggestion {id: $cat_id})
+                        SET tx.name = $sugg_name, tx.level = 'SUBMODULE'
+                        MERGE (n)-[:BELONGS_TO]->(tx)
+                        """,
+                        name=node["name"], cat_id=req.categoryId, sugg_name=sugg.proposedPath
+                    )
+                else:
+                    # Link to category (whether strict or suggested)
+                    # It doesn't matter for Neo4j, we just attach it to an identifier
+                    session.run(
+                        """
+                        MATCH (n:Entity {name: $name}) 
+                        MERGE (tx:TaxonomyNode {id: $cat_id})
+                        MERGE (n)-[:BELONGS_TO]->(tx)
+                        """,
+                        name=node["name"], cat_id=req.categoryId
+                    )
             
             # 4. Create Edges
             for edge in req.relationships:
@@ -1028,7 +1146,10 @@ async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
     if request.domain_id:
         safe_id = request.domain_id.replace('-', '_')
         try:
-            collection = chroma_client.get_or_create_collection(name=f"nexis_{safe_id}")
+            collection = chroma_client.get_or_create_collection(
+                name=f"nexis_{safe_id}",
+                embedding_function=dashscope_ef
+            )
         except Exception:
             pass
 
