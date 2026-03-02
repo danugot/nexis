@@ -99,8 +99,9 @@ async function getProvider(): Promise<string> {
             return data.llm_provider || "gemini";
         }
     } catch (e) {
-        return "gemini";
+        console.warn("Could not fetch provider, defaulting to gemini");
     }
+    return "gemini";
 }
 
 export async function detectGaps(input: DetectGapsInput): Promise<GapReport> {

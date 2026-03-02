@@ -15,8 +15,8 @@ import { retrieveKnowledge } from './skills/retrieve-knowledge'; // [NEW]
 import { compareRequirementsDeclaration, compareRequirements } from './skills/compare-requirements';
 import { traceDependenciesDeclaration, traceDependencies } from './skills/trace-dependencies';
 import { checkComplianceDeclaration, checkCompliance } from './skills/check-compliance';
-import { generateTestsDeclaration,
-    detectGapsDeclaration, generateTests } from './skills/generate-tests';
+import { generateTestsDeclaration, generateTests } from './skills/generate-tests';
+import { detectGapsDeclaration, detectGaps } from './skills/detect-gaps';
 
 // --- Configuration ---
 const API_KEY = process.env.GEMINI_API_KEY;
