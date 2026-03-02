@@ -726,6 +726,14 @@ async def retrieve(request: QueryRequest, db: Session = Depends(get_db)):
             count = collection.count()
             print(f"[DIAGNOSTIC] Current collection: {collection.name}, Count: {count}")
             
+            # If domain collection is empty, check global nexis_knowledge
+            if count == 0 and collection.name != "nexis_knowledge":
+                try:
+                    global_count = chroma_collection.count()
+                    print(f"[DIAGNOSTIC] Domain empty. Global collection (nexis_knowledge) Count: {global_count}")
+                except Exception:
+                    pass
+            
             # 1a. Semantic Search (Top-K)
             vector_k = max(20, request.n_results * 4) 
             vector_results = collection.query(
@@ -819,12 +827,27 @@ async def retrieve(request: QueryRequest, db: Session = Depends(get_db)):
             
     search_terms = parts if parts else [request.query]
     
+    # DIAGNOSTIC: Search Term Expansion
+    expanded_terms = []
+    for term in search_terms:
+        expanded_terms.append(term)
+        if term == "贸背":
+            expanded_terms.extend(["贸易", "背景", "贸背资料"])
+        elif term == "贸易":
+            expanded_terms.append("贸易背景")
+            
+    search_terms = list(set(expanded_terms))
+    print(f"[DIAGNOSTIC] Final Graph Search Terms: {search_terms}")
+    
     graph_facts_set = set()
     for term in search_terms:
          facts = query_graph(term, domain_id=request.domain_id, project_name=request.project_name)
          graph_facts_set.update(facts)
 
-    graph_facts = list(graph_facts_set)[:20] # Take up to 20 unique facts
+    graph_facts = list(graph_facts_set)[:40] # Increase to 40 for better coverage
+    # DIAGNOSTIC: Log first 5 graph facts
+    for idx, fact in enumerate(graph_facts[:5]):
+        print(f"[DIAGNOSTIC] Graph Fact {idx+1}: {fact}")
     for fact in graph_facts:
          context_items.append({
             "type": "graph",
