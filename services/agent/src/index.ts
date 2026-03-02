@@ -13,7 +13,8 @@ import { checkConflict } from './skills/conflict-checker';
 import { withdrawSkill } from './skills/withdraw-skill';
 import { retrieveKnowledge } from './skills/retrieve-knowledge'; // [NEW]
 import { compareRequirementsDeclaration, compareRequirements } from './skills/compare-requirements';
-import { traceDependenciesDeclaration, traceDependencies } from './skills/trace-dependencies';
+import { traceDependenciesDeclaration,
+    checkComplianceDeclaration, traceDependencies } from './skills/trace-dependencies';
 
 // --- Configuration ---
 const API_KEY = process.env.GEMINI_API_KEY;
@@ -125,7 +126,8 @@ const tools: FunctionDeclaration[] = [
         }
     },
     compareRequirementsDeclaration,
-    traceDependenciesDeclaration
+    traceDependenciesDeclaration,
+    checkComplianceDeclaration
 ];
 
 // --- Main Agent Loop ---
@@ -219,6 +221,8 @@ async function main() {
                         toolResult = await compareRequirements(args);
                     } else if (name === "trace_dependencies") {
                         toolResult = await traceDependencies(args);
+                    } else if (name === "check_compliance") {
+                        toolResult = await checkCompliance(args);
                     } else {
                         toolResult = { error: `Unknown tool: ${name}` };
                     }

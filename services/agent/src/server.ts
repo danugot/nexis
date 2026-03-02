@@ -23,7 +23,8 @@ import { reviewTaxonomyQueueDeclaration, reviewTaxonomyQueue } from './skills/re
 import { simulateImpactDeclaration, simulateImpact } from './skills/simulate-impact';
 import { draftPrdDeclaration, draftPrd } from './skills/draft-prd';
 import { compareRequirementsDeclaration, compareRequirements } from './skills/compare-requirements';
-import { traceDependenciesDeclaration, traceDependencies } from './skills/trace-dependencies';
+import { traceDependenciesDeclaration,
+    checkComplianceDeclaration, traceDependencies } from './skills/trace-dependencies';
 import { prisma } from './db';
 
 // --- Configuration ---
@@ -146,7 +147,8 @@ const tools: FunctionDeclaration[] = [
     simulateImpactDeclaration,
     draftPrdDeclaration,
     compareRequirementsDeclaration,
-    traceDependenciesDeclaration
+    traceDependenciesDeclaration,
+    checkComplianceDeclaration
 ];
 
 // --- Express Server ---
@@ -442,6 +444,8 @@ NEVER attempt to write or draft a PRD directly in the chat response. You MUST AL
                             toolResult = await compareRequirements(args);
                         } else if (name === "trace_dependencies") {
                             toolResult = await traceDependencies(args);
+                        } else if (name === "check_compliance") {
+                            toolResult = await checkCompliance({ ...args, domainId, projectName });
                         } else {
                             toolResult = { error: `Unknown tool: ${name}` };
                         }
@@ -534,6 +538,8 @@ NEVER attempt to write or draft a PRD directly in the chat response. You MUST AL
                             toolResult = await compareRequirements(args);
                         } else if (name === "trace_dependencies") {
                             toolResult = await traceDependencies(args);
+                        } else if (name === "check_compliance") {
+                            toolResult = await checkCompliance({ ...args, domainId, projectName });
                         } else {
                             toolResult = { error: `Unknown tool: ${name}` };
                         }
