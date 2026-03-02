@@ -722,6 +722,10 @@ async def retrieve(request: QueryRequest, db: Session = Depends(get_db)):
 
     if collection:
         try:
+            # DIAGNOSTIC: Log collection status
+            count = collection.count()
+            print(f"[DIAGNOSTIC] Current collection: {collection.name}, Count: {count}")
+            
             # 1a. Semantic Search (Top-K)
             vector_k = max(20, request.n_results * 4) 
             vector_results = collection.query(
@@ -732,7 +736,13 @@ async def retrieve(request: QueryRequest, db: Session = Depends(get_db)):
             v_ids = vector_results['ids'][0] if vector_results['ids'] else []
             v_docs = vector_results['documents'][0] if vector_results['documents'] else []
             v_metas = vector_results['metadatas'][0] if vector_results['metadatas'] else []
+            v_distances = vector_results['distances'][0] if 'distances' in vector_results and vector_results['distances'] else []
             
+            # DIAGNOSTIC: Log Top-V results
+            for i in range(min(3, len(v_ids))):
+                dist = v_distances[i] if i < len(v_distances) else "N/A"
+                print(f"[DIAGNOSTIC] Vector Top-{i+1}: ID={v_ids[i]}, Source={v_metas[i].get('source')}, Score={dist}")
+
             vector_ranks = {vid: rank for rank, vid in enumerate(v_ids)}
             
             # 1b. BM25 Lexical Search (Over the entire domain collection)
@@ -753,6 +763,12 @@ async def retrieve(request: QueryRequest, db: Session = Depends(get_db)):
                 bm25_ranked = sorted(zip(all_ids, bm25_scores, all_docs, all_metas), key=lambda x: x[1], reverse=True)
                 # Assign rank only to those with scores > 0
                 bm25_ranks = {vid: rank for rank, (vid, score, doc, meta) in enumerate(bm25_ranked) if score > 0} 
+
+                # DIAGNOSTIC: Log Top-BM25 results
+                for i in range(min(3, len(bm25_ranked))):
+                    vid, score, doc, meta = bm25_ranked[i]
+                    if score > 0:
+                        print(f"[DIAGNOSTIC] BM25 Top-{i+1}: ID={vid}, Source={meta.get('source')}, Score={score}")
             
             # 1c. Reciprocal Rank Fusion (RRF)
             k_rrf = 60
@@ -816,6 +832,7 @@ async def retrieve(request: QueryRequest, db: Session = Depends(get_db)):
             "source": "Neo4j"
         })
 
+    print(f"[DIAGNOSTIC] Retrieval completed. Vector: {len([i for i in context_items if i['type']=='vector'])}, Graph: {len([i for i in context_items if i['type']=='graph'])}")
     return {"context": context_items}
 
 @app.get("/graph/visualize")

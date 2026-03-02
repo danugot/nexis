@@ -42,6 +42,12 @@ export async function retrieveKnowledge(input: RetrieveKnowledgeInput, domainId?
         const data: any = await response.json();
         const context_items = data.context as KnowledgeItem[];
 
+        // DIAGNOSTIC: Log raw retrieval count and sources
+        console.log(`[DIAGNOSTIC] RAG API returned ${context_items.length} items.`);
+        context_items.forEach((item, idx) => {
+            console.log(`[DIAGNOSTIC] Item ${idx + 1}: Type=${item.type}, Source=${item.source}`);
+        });
+
         // Format for LLM
         const formatted = context_items.map(item =>
             `[${item.type.toUpperCase()}] (${item.source}): ${item.content}`
