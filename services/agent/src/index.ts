@@ -14,8 +14,8 @@ import { withdrawSkill } from './skills/withdraw-skill';
 import { retrieveKnowledge } from './skills/retrieve-knowledge'; // [NEW]
 import { compareRequirementsDeclaration, compareRequirements } from './skills/compare-requirements';
 import { traceDependenciesDeclaration, traceDependencies } from './skills/trace-dependencies';
-import { checkComplianceDeclaration,
-    generateTestsDeclaration, checkCompliance } from './skills/check-compliance';
+import { checkComplianceDeclaration, checkCompliance } from './skills/check-compliance';
+import { generateTestsDeclaration, generateTests } from './skills/generate-tests';
 
 // --- Configuration ---
 const API_KEY = process.env.GEMINI_API_KEY;

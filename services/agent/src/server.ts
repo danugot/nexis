@@ -24,8 +24,8 @@ import { simulateImpactDeclaration, simulateImpact } from './skills/simulate-imp
 import { draftPrdDeclaration, draftPrd } from './skills/draft-prd';
 import { compareRequirementsDeclaration, compareRequirements } from './skills/compare-requirements';
 import { traceDependenciesDeclaration, traceDependencies } from './skills/trace-dependencies';
-import { checkComplianceDeclaration,
-    generateTestsDeclaration, checkCompliance } from './skills/check-compliance';
+import { checkComplianceDeclaration, checkCompliance } from './skills/check-compliance';
+import { generateTestsDeclaration, generateTests } from './skills/generate-tests';
 import { prisma } from './db';
 
 // --- Configuration ---
