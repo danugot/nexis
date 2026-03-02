@@ -528,7 +528,31 @@ async def archive_document(doc_id: str, db: Session = Depends(get_db)):
         except Exception as e:
             print(f"Warning: failed to mark DELETED in Neo4j for {doc.filename}: {e}")
             
-    return {"message": f"Document {doc.filename} logically archived."}
+@app.post("/documents/{doc_id}/re-ingest")
+async def re_ingest_document(doc_id: str, db: Session = Depends(get_db)):
+    # 1. Archive first to cleanup Neo4j and Chroma
+    await archive_document(doc_id, db)
+    
+    # 2. Get document details
+    doc = db.query(Document).filter(Document.id == doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+        
+    doc.status = "QUEUED"
+    db.commit()
+    
+    # 3. Push to Redis Queue
+    file_path = os.path.join(UPLOAD_DIR, doc.filename)
+    job = {
+        "type": "ingest",
+        "filePath": file_path,
+        "filename": doc.filename,
+        "projectName": doc.projectName,
+        "documentId": doc.id 
+    }
+    redis_client.rpush("nexis:ingest:queue", json.dumps(job))
+    
+    return {"status": "success", "message": f"Document {doc.filename} re-queued for processing."}
     
 @app.get("/documents/{filename}/conflicts")
 async def get_document_conflicts(filename: str):

@@ -209,6 +209,7 @@ def ingest_to_vector_db(filename, content, domain_id=None, project_name=None):
             name=collection_name,
             embedding_function=dashscope_ef
         )
+        print(f"[DIAGNOSTIC] Initialized Chroma Collection: {collection_name}, Initial Count: {chroma_collection.count()}")
     except Exception as e:
         print(f"Error connecting to ChromaDB: {e}")
         return
@@ -228,8 +229,9 @@ def ingest_to_vector_db(filename, content, domain_id=None, project_name=None):
             metadatas.append(meta)
         
         if chunks:
+            print(f"[DIAGNOSTIC] Prepared {len(chunks)} chunks for {filename}. First chunk peek: {chunks[0][:50]}...")
             chroma_collection.add(documents=chunks, metadatas=metadatas, ids=ids)
-            print(f"Ingested {len(chunks)} semantic chunks into ChromaDB.")
+            print(f"[DIAGNOSTIC] Ingestion successful. New Count: {chroma_collection.count()}")
     except Exception as e:
         print(f"Error ingesting to ChromaDB: {e}")
 
