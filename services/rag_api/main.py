@@ -445,7 +445,15 @@ def query_graph(search_term, domain_id=None, project_name=None):
                 """,
                 term=search_term
             )
-            results = [record["fact"] for record in result if record["fact"]]
+            import re
+            def sanitize_fact(fact):
+                # Remove common file extensions
+                fact = re.sub(r'\.(docx|pdf|md|txt|xlsx|pptx)', '', fact, flags=re.IGNORECASE)
+                # Remove date prefixes like 20221227_
+                fact = re.sub(r'\b\d{8}_', '', fact)
+                return fact
+
+            results = [sanitize_fact(record["fact"]) for record in result if record["fact"]]
             print(f"Graph query for '{search_term}' found {len(results)} facts.")
     except Exception as e:
         print(f"Graph query error: {e}")
@@ -786,7 +794,7 @@ async def retrieve(request: QueryRequest, db: Session = Depends(get_db)):
 
     # 2. Graph Search (Simple Keyword Extraction from Query)
     # Use jieba to extract meaningful nouns/terms, filter out stop words
-    ignore_words = {"功能", "实现", "主要", "哪些", "怎么", "什么", "如何", "系统", "模块", "项目"}
+    ignore_words = {"功能", "实现", "主要", "哪些", "怎么", "什么", "如何", "系统", "模块", "项目", "docx", "pdf", "md", "txt", "xlsx", "pptx"}
     parts = []
     for word in jieba.cut(request.query):
         w = word.strip()

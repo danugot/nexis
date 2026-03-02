@@ -312,7 +312,7 @@ app.post('/chat', async (req, res) => {
     };
 
     try {
-        let modelTag = "gemini-3-flash-preview";
+        let modelTag = "qwen-plus";
         try {
             const val = await redis.get("nexis:settings:llm_provider");
             if (val) modelTag = val;
@@ -345,6 +345,10 @@ app.post('/chat', async (req, res) => {
 
 **Semantic Retrieval Rule (CRITICAL)**:
 When formulating the \`query\` argument for \`retrieve_knowledge\`, DO NOT over-abstract. If the user's prompt contains specific, highly-contextual nouns or features (e.g. '导流路径', '审批流', '回帖路径'), you MUST include those EXACT terms in your query string. Searching for generic terms like "新增功能" will fail to retrieve highly-specific vector chunks.
+
+**Metadata Anti-Distraction Rule (CRITICAL)**: 
+1. DO NOT search for technical identifiers, file extensions (e.g., .docx, .pdf, .md), or date-strings (e.g., 20221227) found in the 'Source' labels or context of retrieved results. 
+2. These are system metadata, not business concepts. Searching for them leads to infinite loops and poor performance.
 
 **Proactive Copilot Rule (CRITICAL)**:
 If the user uses "what if" scenarios (e.g., "如果支持...", "可以实现吗") to ask about adding a new capability, proposing a process change, or asking for a DRAFT PRD, you MUST immediately call \`simulate_impact\` first. Once that returns the Feasibility Impact Report, if they asked for a PRD, you MUST call \`draft_prd\` next. You are acting as an active Business Architect.
@@ -381,7 +385,7 @@ NEVER attempt to write or draft a PRD directly in the chat response. You MUST AL
             messages.push({ role: "user", content: promptContext });
 
             let loopCount = 0;
-            while (loopCount < 10) {
+            while (loopCount < 8) {
                 loopCount++;
                 let completion: any;
                 try {
@@ -484,7 +488,7 @@ NEVER attempt to write or draft a PRD directly in the chat response. You MUST AL
 
             // ReAct Loop for Tool Calling
             let geminiLoopCount = 0;
-            while (response.functionCalls() && geminiLoopCount < 10) {
+            while (response.functionCalls() && geminiLoopCount < 8) {
                 geminiLoopCount++;
                 const functionCalls = response.functionCalls();
                 if (!functionCalls) break;
