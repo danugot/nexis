@@ -15,7 +15,8 @@ import { retrieveKnowledge } from './skills/retrieve-knowledge'; // [NEW]
 import { compareRequirementsDeclaration, compareRequirements } from './skills/compare-requirements';
 import { traceDependenciesDeclaration, traceDependencies } from './skills/trace-dependencies';
 import { checkComplianceDeclaration, checkCompliance } from './skills/check-compliance';
-import { generateTestsDeclaration, generateTests } from './skills/generate-tests';
+import { generateTestsDeclaration,
+    detectGapsDeclaration, generateTests } from './skills/generate-tests';
 
 // --- Configuration ---
 const API_KEY = process.env.GEMINI_API_KEY;
@@ -129,7 +130,8 @@ const tools: FunctionDeclaration[] = [
     compareRequirementsDeclaration,
     traceDependenciesDeclaration,
     checkComplianceDeclaration,
-    generateTestsDeclaration
+    generateTestsDeclaration,
+    detectGapsDeclaration
 ];
 
 // --- Main Agent Loop ---
@@ -227,6 +229,8 @@ async function main() {
                         toolResult = await checkCompliance(args);
                     } else if (name === "generate_tests") {
                         toolResult = await generateTests(args);
+                    } else if (name === "detect_gaps") {
+                        toolResult = await detectGaps(args);
                     } else {
                         toolResult = { error: `Unknown tool: ${name}` };
                     }
