@@ -49,15 +49,44 @@ const openai = new OpenAI({
 
 const RAG_API_URL = process.env.RAG_API_URL || "http://rag_api:8000";
 
+async function queryRAG(query: string, projectName?: string): Promise<string> {
+    try {
+        const response = await fetch(`${RAG_API_URL}/retrieve`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                query: query,
+                n_results: 10,
+                project_name: projectName
+            })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            if (data.context && Array.isArray(data.context)) {
+                return data.context.map((item: any) =>
+                    `[${item.type.toUpperCase()}] (${item.source}): ${item.content}`
+                ).join("\n");
+            }
+        }
+        return "";
+    } catch (error) {
+        console.warn("RAG Service unavailable, skipping context retrieval.", error);
+        return "";
+    }
+}
+
 async function getGraphContext(entityName: string): Promise<string> {
     try {
         // We use a deeper trace for lineage to find roots
         const response = await fetch(`${RAG_API_URL}/graph/trace/${encodeURIComponent(entityName)}?depth=4`);
         if (response.ok) {
             const subgraph = await response.json();
-            return JSON.stringify(subgraph);
+            if (subgraph.nodes && subgraph.nodes.length > 0) {
+                return JSON.stringify(subgraph);
+            }
         }
-        return "No graph context found.";
+        return "No specific graph relationships found.";
     } catch (e) {
         return "Graph retrieval failed.";
     }
@@ -77,11 +106,18 @@ async function getProvider(): Promise<string> {
 }
 
 export async function explainLineage(input: ExplainLineageInput): Promise<LineageReport> {
-    const { entity_name } = input;
+    const { entity_name, projectName } = input;
     const provider = await getProvider();
+
+    console.log(`[Lineage] Analyzing entity: ${entity_name}`);
 
     // 1. Get deep graph context to find roots
     const graphContext = await getGraphContext(entity_name);
+    // 2. Get vector context to find textual evidence
+    const vectorContext = await queryRAG(`Origins, goals, regulations, and implementation of ${entity_name}`, projectName);
+
+    console.log(`[Lineage] Graph Context found nodes: ${graphContext.length > 50 ? 'Yes' : 'No'}`);
+    console.log(`[Lineage] Vector Context found results: ${vectorContext.length > 50 ? 'Yes' : 'No'}`);
 
     const prompt = `
     You are 'Nexis', a Master Business Architect and Domain Historian.
@@ -92,23 +128,27 @@ export async function explainLineage(input: ExplainLineageInput): Promise<Lineag
 
     === Graph Context (Nodes & Relations) ===
     ${graphContext}
+
+    === Textual Evidence (Vector Search) ===
+    ${vectorContext || "No direct textual evidence found."}
     
     === Analysis Instructions ===
-    1. Identify the "Root Node" in the subgraph. This is usually a 'Business_Goal', 'Regulation', or 'Policy' node that has no incoming 'derived_from' or 'implements' relations, but many outbound ones.
-    2. Map the "Lineage Path": The sequence of entities and relations from the root to the target entity.
-    3. Provide a "Business Justification": Explain WHY this rule exists based on the root goal (e.g., "This fee exists to comply with Central Bank Regulation X").
-    4. Summarize the lineage clearly for a senior stakeholder.
+    1. STRICT RULE: You MUST base your analysis ONLY on the provided Graph Context and Textual Evidence.
+    2. If NO evidence of origin is found in the provided context, clearly state that the lineage is UNKNOWN in the knowledge base. DO NOT HALLUCINATE OR USE INTERNAL KNOWLEDGE.
+    3. Identify the "Root Node" or "Source Document Clause". This is usually a 'Business_Goal', 'Regulation', or 'Policy'.
+    4. Map the "Lineage Path": The sequence of entities and relations from the root to the target entity.
+    5. Provide a "Business Justification": Explain WHY this rule exists based on the root goal.
 
     Return ONLY valid JSON:
     {
-        "summary": "High-level summary of the lineage.",
+        "summary": "High-level summary of the lineage. If unknown, explain that the knowledge base lacks this specific derivation.",
         "origin_point": {
-            "name": "Name of the root goal/regulation",
-            "type": "Type of node",
+            "name": "Name of the root goal/regulation or 'Unknown'",
+            "type": "Type of node or source",
             "source": "Source document if known"
         },
-        "lineage_path": ["Root Entity -> Relation -> Intermediate Entity -> Relation -> Target Entity"],
-        "business_justification": "Deep explanation of the reasoning lineage."
+        "lineage_path": ["Path steps..."],
+        "business_justification": "Detailed explanation based ONLY on provided context."
     }
     `;
 
