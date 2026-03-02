@@ -71,6 +71,21 @@ const openai = new OpenAI({
 
 const RAG_API_URL = process.env.RAG_API_URL || "http://rag_api:8000";
 
+async function getGraphContext(filename: string): Promise<string> {
+    try {
+        const response = await fetch(`${RAG_API_URL}/graph/visualize?search_query=${encodeURIComponent(filename)}&limit=50`);
+        if (response.ok) {
+            const data = await response.json();
+            if (data.nodes && data.nodes.length > 0) {
+                return JSON.stringify(data);
+            }
+        }
+        return "No graph context for this document.";
+    } catch (e) {
+        return "Graph retrieval failed.";
+    }
+}
+
 async function getProvider(): Promise<string> {
     try {
         const res = await fetch(`${RAG_API_URL}/settings`);
@@ -84,16 +99,20 @@ async function getProvider(): Promise<string> {
     return "gemini";
 }
 
-async function getDocumentContent(input: { id?: string; filename?: string; project?: string; version?: string }): Promise<string> {
+async function getDocumentDetails(input: { id?: string; filename?: string; project?: string; version?: string }): Promise<{ content: string; filename: string }> {
     try {
         let docId = input.id;
+        let filename = input.filename || "";
 
         if (!docId && input.project && input.version) {
             const res = await fetch(`${RAG_API_URL}/projects/${encodeURIComponent(input.project)}/versions`);
             if (res.ok) {
                 const versions = await res.json();
                 const doc = versions.find((v: any) => v.version.toLowerCase() === input.version?.toLowerCase());
-                if (doc) docId = doc.id;
+                if (doc) {
+                    docId = doc.id;
+                    filename = doc.filename;
+                }
             }
         }
 
@@ -102,41 +121,44 @@ async function getDocumentContent(input: { id?: string; filename?: string; proje
             if (res.ok) {
                 const docs = await res.json();
                 const doc = docs.find((d: any) => d.filename === input.filename);
-                if (doc) docId = doc.id;
+                if (doc) {
+                    docId = doc.id;
+                    filename = doc.filename;
+                }
             }
         }
 
-        if (!docId) return "";
+        if (!docId) return { content: "", filename: "" };
 
         const contentRes = await fetch(`${RAG_API_URL}/documents/${docId}/content`);
-        if (!contentRes.ok) return "";
+        if (!contentRes.ok) return { content: "", filename: "" };
         const contentData = await contentRes.json();
-        return contentData.content || "";
+        return { content: contentData.content || "", filename };
     } catch (e) {
         console.error("Failed to fetch document content:", e);
-        return "";
+        return { content: "", filename: "" };
     }
 }
 
 export async function compareRequirements(input: CompareRequirementsInput): Promise<ComparisonReport> {
     const provider = await getProvider();
 
-    const contentA = await getDocumentContent({
+    const docA = await getDocumentDetails({
         id: input.docIdA,
         filename: input.filenameA,
         project: input.projectName,
         version: input.versionA
     });
-    const contentB = await getDocumentContent({
+    const docB = await getDocumentDetails({
         id: input.docIdB,
         filename: input.filenameB,
         project: input.projectName,
         version: input.versionB
     });
 
-    if (!contentA || !contentB) {
+    if (!docA.content || !docB.content) {
         return {
-            summary: "Error: Could not retrieve content for one or both requirements. Please ensure the project/version or filename is correct.",
+            summary: "Error: Could not retrieve content for one or both requirements.",
             added_logic: [],
             removed_logic: [],
             modified_logic: [],
@@ -144,26 +166,38 @@ export async function compareRequirements(input: CompareRequirementsInput): Prom
         };
     }
 
+    // 2. Fetch Graph subgraphs for structural comparison
+    const graphA = await getGraphContext(docA.filename);
+    const graphB = await getGraphContext(docB.filename);
+
     const prompt = `
     You are 'Nexis', a Senior Business Architect.
-    Your task is to analyze the LOGICAL DIFFERENCES between two requirements documents.
+    Your task is to analyze the LOGICAL and STRUCTURAL DIFFERENCES between two requirements documents.
+    Use BOTH the Markdown text and the Graph structures.
     
-    === baseline ===
-    ${contentA.substring(0, 12000)}
+    === Baseline Requirement (A) ===
+    Markdown Content (Sample):
+    ${docA.content.substring(0, 8000)}
+    Knowledge Graph Context:
+    ${graphA}
 
-    === target ===
-    ${contentB.substring(0, 12000)}
+    === Target Requirement (B) ===
+    Markdown Content (Sample):
+    ${docB.content.substring(0, 8000)}
+    Knowledge Graph Context:
+    ${graphB}
     
     === Analysis Instructions ===
-    1. Compare the two requirements and identify what is different in terms of business logic, rules, constraints, flows, and data.
-    2. Provide a high-level Summary of the differences.
-    3. Perform a Risk Assessment: Does the target requirement introduce new complexity, conflict with existing patterns, or have missing prerequisites?
+    1. Identify logical changes in business rules, constraints, and flows from the text.
+    2. Identify structural changes in entities and relationships from the graphs (e.g., "Entity X now connects to Y instead of Z").
+    3. Synthesize the findings into a clear comparison report.
+    4. Assess risks: Does the change break established patterns or introduce complexity?
 
     Return ONLY valid JSON:
     {
         "summary": "Overall narrative of differences.",
-        "added_logic": ["Rule 1...", "Feature X..."],
-        "removed_logic": ["Constraint Y...", "Process Z..."],
+        "added_logic": ["New Entity X...", "Relation Y added..."],
+        "removed_logic": ["Constraint Z removed..."],
         "modified_logic": ["Change A to B"],
         "risk_assessment": "Analysis of potential issues."
     }

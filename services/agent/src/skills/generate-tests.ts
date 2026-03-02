@@ -82,9 +82,11 @@ async function queryRAG(query: string, projectName?: string): Promise<string> {
     }
 }
 
-async function getGraphContext(entityName: string): Promise<string> {
+async function getGraphContext(entityName: string, projectName?: string): Promise<string> {
     try {
-        const response = await fetch(`${RAG_API_URL}/graph/trace/${encodeURIComponent(entityName)}?depth=2`);
+        const url = new URL(`${RAG_API_URL}/graph/trace/${encodeURIComponent(entityName)}`);
+        if (projectName) url.searchParams.append("project_name", projectName);
+        const response = await fetch(url.toString());
         if (response.ok) {
             const subgraph = await response.json();
             return JSON.stringify(subgraph);
@@ -114,7 +116,7 @@ export async function generateTests(input: GenerateTestsInput): Promise<TestRepo
 
     // 1. Gather context from Vector and Graph
     const vectorContext = await queryRAG(`Business rules and flow for ${feature_name}`, projectName);
-    const graphContext = await getGraphContext(feature_name);
+    const graphContext = await getGraphContext(feature_name, projectName);
 
     const prompt = `
     You are 'Nexis', a Senior QA Architect and Business Analyst.

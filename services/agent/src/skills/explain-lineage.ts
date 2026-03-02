@@ -113,15 +113,16 @@ export async function explainLineage(input: ExplainLineageInput): Promise<Lineag
 
     // 1. Get deep graph context to find roots
     const graphContext = await getGraphContext(entity_name);
-    // 2. Get vector context to find textual evidence
-    const vectorContext = await queryRAG(`Origins, goals, regulations, and implementation of ${entity_name}`, projectName);
+    // 2. Get vector context to find textual evidence - broaden search
+    const vectorContext = await queryRAG(`${entity_name} 的来源、背景、规则、依据、Regulation, Origins`, projectName);
 
+    console.log(`[Lineage] Analyzing: ${entity_name}`);
     console.log(`[Lineage] Graph Context found nodes: ${graphContext.length > 50 ? 'Yes' : 'No'}`);
     console.log(`[Lineage] Vector Context found results: ${vectorContext.length > 50 ? 'Yes' : 'No'}`);
 
     const prompt = `
     You are 'Nexis', a Master Business Architect and Domain Historian.
-    Your task is to "Trace the Lineage" of a specific business rule or entity back to its ultimate origin point.
+    Your task is to "Trace the Lineage" of a specific business rule or entity back to its ultimate origin point using the provided Knowledge Base context.
 
     === Target Entity ===
     ${entity_name}
@@ -134,21 +135,22 @@ export async function explainLineage(input: ExplainLineageInput): Promise<Lineag
     
     === Analysis Instructions ===
     1. STRICT RULE: You MUST base your analysis ONLY on the provided Graph Context and Textual Evidence.
-    2. If NO evidence of origin is found in the provided context, clearly state that the lineage is UNKNOWN in the knowledge base. DO NOT HALLUCINATE OR USE INTERNAL KNOWLEDGE.
-    3. Identify the "Root Node" or "Source Document Clause". This is usually a 'Business_Goal', 'Regulation', or 'Policy'.
-    4. Map the "Lineage Path": The sequence of entities and relations from the root to the target entity.
-    5. Provide a "Business Justification": Explain WHY this rule exists based on the root goal.
+    2. Identify the "Root Goal" or "Source Document Clause".
+    3. If multiple sources exist, summarize them clearly.
+    4. Provide a "Confidence Score" for this lineage trace (0.0 to 1.0).
+    5. If NO evidence of origin is found in the provided context, clearly state that the lineage is UNKNOWN in the knowledge base. DO NOT HALLUCINATE OR USE INTERNAL KNOWLEDGE.
 
     Return ONLY valid JSON:
     {
-        "summary": "High-level summary of the lineage. If unknown, explain that the knowledge base lacks this specific derivation.",
+        "summary": "High-level summary of the lineage.",
         "origin_point": {
             "name": "Name of the root goal/regulation or 'Unknown'",
             "type": "Type of node or source",
             "source": "Source document if known"
         },
-        "lineage_path": ["Path steps..."],
-        "business_justification": "Detailed explanation based ONLY on provided context."
+        "lineage_path": ["Detailed steps from root to the entity"],
+        "business_justification": "Why this rule exists based on the retrieved context.",
+        "confidence": 0.9
     }
     `;
 

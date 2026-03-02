@@ -81,6 +81,23 @@ async function queryRAG(query: string, domainId?: string, projectName?: string):
     }
 }
 
+async function getGraphContext(entity_name: string, projectName?: string): Promise<string> {
+    try {
+        const url = new URL(`${RAG_API_URL}/graph/trace/${encodeURIComponent(entity_name)}`);
+        if (projectName) url.searchParams.append("project_name", projectName);
+        const response = await fetch(url.toString());
+        if (response.ok) {
+            const subgraph = await response.json();
+            if (subgraph.nodes && subgraph.nodes.length > 0) {
+                return JSON.stringify(subgraph);
+            }
+        }
+        return "No specific structural rules found in graph.";
+    } catch (e) {
+        return "Graph retrieval failed.";
+    }
+}
+
 async function getProvider(): Promise<string> {
     try {
         const res = await fetch(`${RAG_API_URL}/settings`);
@@ -98,36 +115,45 @@ export async function checkCompliance(input: CheckComplianceInput): Promise<Comp
     const { requirement_text, domainId, projectName } = input;
     const provider = await getProvider();
 
-    // 1. Retrieve potential global rules and patterns
-    const complianceContext = await queryRAG(`Global business rules security policy architectural standards ${requirement_text}`, domainId, projectName);
+    // 1. Retrieve potential global rules (Vector)
+    const vectorContext = await queryRAG(`Global business rules security policy compliance standards ${requirement_text}`, domainId, projectName);
+
+    // 2. Retrieve structural dependencies (Graph)
+    const graphContext = await getGraphContext(requirement_text, projectName);
 
     const prompt = `
     You are 'Nexis', a Senior Compliance Officer and System Architect.
-    Your task is to validate a proposed requirement or feature against the existing "Global Rules" and "Business Patterns" found in our knowledge base.
+    Your task is to validate a proposed requirement or feature against the existing "Global Rules" and "Business Patterns".
+    Use BOTH document-based rules and Knowledge Graph structures.
 
     === Proposed Requirement ===
     ${requirement_text}
 
-    === Relevant Global Rules & Current Context ===
-    ${complianceContext || "No specific global rules found. Proceed with standard industry best practices."}
+    === Textual Rules & Standards (Vector) ===
+    ${vectorContext || "No specific document rules found."}
+
+    === Structural Relationships (Graph) ===
+    ${graphContext}
     
     === Analysis Instructions ===
-    1. Identify any direct or indirect violations of the rules found in the context.
-    2. For each violation, explain WHY it is a violation and cite the SOURCE.
-    3. If there are no violations, state that the requirement appears compliant.
-    4. Provide recommendations for alignment if violations are found.
+    1. Identify violations of document-based rules found in the vector context.
+    2. Identify conflicts with structural relationships in the graph context (e.g., if the user proposes something that breaks a 'DEPENDS_ON' or 'MUST_NOT_HAVE' relation).
+    3. For each violation, explain WHY it is a violation and cite the SOURCE.
+    4. Provide recommendations for alignment.
+    5. Give a Confidence Score (0.0 to 1.0) based on context availability.
 
-    Return ONLY valid JSON matching this schema:
+    Return ONLY valid JSON:
     {
         "is_compliant": true/false,
         "violations": [
             {
                 "rule": "Short name of the rule violated",
                 "explanation": "Detailed explanation of the conflict",
-                "source": "Filename or Source of truth"
+                "source": "Filename or Graph Entity"
             }
         ],
-        "recommendations": "How to fix the violations or optimize for compliance."
+        "recommendations": "How to fix the violations.",
+        "confidence": 0.85
     }
     `;
 

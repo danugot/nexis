@@ -78,6 +78,23 @@ async function queryRAG(query: string, projectName?: string): Promise<string> {
     }
 }
 
+async function getGraphContext(entity_name: string, projectName?: string): Promise<string> {
+    try {
+        const url = new URL(`${RAG_API_URL}/graph/trace/${encodeURIComponent(entity_name)}`);
+        if (projectName) url.searchParams.append("project_name", projectName);
+        const response = await fetch(url.toString());
+        if (response.ok) {
+            const subgraph = await response.json();
+            if (subgraph.nodes && subgraph.nodes.length > 0) {
+                return JSON.stringify(subgraph);
+            }
+        }
+        return "No structural dependencies found in graph.";
+    } catch (e) {
+        return "Graph retrieval failed.";
+    }
+}
+
 async function getProvider(): Promise<string> {
     try {
         const res = await fetch(`${RAG_API_URL}/settings`);
@@ -95,32 +112,40 @@ export async function simulateImpact(input: SimulateImpactInput): Promise<Impact
     const { proposed_feature, search_keywords, projectName } = input;
     const provider = await getProvider();
 
-    const ragContext = await queryRAG(search_keywords, projectName);
+    // 1. Textual impact (Vector)
+    const vectorContext = await queryRAG(search_keywords, projectName);
+    // 2. Structural impact (Graph)
+    const graphContext = await getGraphContext(search_keywords, projectName);
 
     const prompt = `
     You are 'Nexis', a Senior Business Architect.
     Your task is to run a "Feasibility Sandbox Simulation" on a newly proposed feature.
+    Use BOTH document-based constraints and structural Knowledge Graph relationships.
 
     === Proposed Feature ===
     ${proposed_feature}
 
-    === Current System Context (from Knowledge Base) ===
-    ${ragContext || "No highly relevant context found."}
+    === Textual Constraints (Vector) ===
+    ${vectorContext || "No highly relevant document context found."}
+
+    === Structural Dependencies (Graph) ===
+    ${graphContext}
     
     === Analysis Instructions ===
-    1. Analyze the context to see if the proposed feature conflicts with existing hard rules or dependencies.
-    2. Identify which UI modules, APIs, or data models will likely need to be modified (Affected Modules).
-    3. Identify any existing rules that would be broken or need updating (Broken Rules).
-    4. Identify any missing data fields or prerequisites required for the new feature (Missing Fields).
-    5. Evaluate overall feasibility and provide suggestions for architectural refactoring.
+    1. Identify conflicts with existing textual rules or logic patterns.
+    2. Identify affected modules/entities from the structural graph connections (Blast Radius).
+    3. Identify "Broken Rules": Existing logic that would need updating.
+    4. Identify "Missing Prerequisites": Fields, APIs, or data that the graph shows are missing.
+    5. Evaluate overall feasibility and provide a Confidence Score (0.0 to 1.0).
 
-    Return ONLY valid JSON matching this schema:
+    Return ONLY valid JSON:
     {
         "is_feasible": true/false,
-        "affected_modules": ["Module A", "Page B"],
-        "broken_rules": ["Rule 1 prevents X", "Rule 2 requires Y"],
-        "missing_fields": ["Field Z on Table W"],
-        "suggestions": "Detailed suggestions on how to safely implement this feature without breaking the system."
+        "affected_modules": ["Module A", "Field B"],
+        "broken_rules": ["Rule X...", "Conflict with Y"],
+        "missing_fields": ["Field Z..."],
+        "suggestions": "Detailed guidance on implementation.",
+        "confidence": 0.9
     }
     `;
 

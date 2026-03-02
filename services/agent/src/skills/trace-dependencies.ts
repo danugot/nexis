@@ -29,6 +29,10 @@ export const traceDependenciesDeclaration: FunctionDeclaration = {
             depth: {
                 type: SchemaType.NUMBER,
                 description: "The depth of the relationship traversal (default is 2)."
+            },
+            projectName: {
+                type: SchemaType.STRING,
+                description: "Optional project name to scope the dependency search."
             }
         },
         required: ["entity_name"]
@@ -45,6 +49,33 @@ const openai = new OpenAI({
 
 const RAG_API_URL = process.env.RAG_API_URL || "http://rag_api:8000";
 
+async function queryRAG(query: string, projectName?: string): Promise<string> {
+    try {
+        const response = await fetch(`${RAG_API_URL}/retrieve`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                query: query,
+                n_results: 10,
+                project_name: projectName
+            })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            if (data.context && Array.isArray(data.context)) {
+                return data.context.map((item: any) =>
+                    `[${item.type.toUpperCase()}] (${item.source}): ${item.content}`
+                ).join("\n");
+            }
+        }
+        return "";
+    } catch (error) {
+        console.warn("RAG Service unavailable, skipping context retrieval.", error);
+        return "";
+    }
+}
+
 async function getProvider(): Promise<string> {
     try {
         const res = await fetch(`${RAG_API_URL}/settings`);
@@ -60,47 +91,61 @@ async function getProvider(): Promise<string> {
 
 export async function traceDependencies(input: TraceDependenciesInput): Promise<TraceReport> {
     const { entity_name, depth = 2 } = input;
+    // Note: TraceDependenciesInput doesn't have projectName yet, we should add it or handle it optionally
+    const projectName = (input as any).projectName;
     const provider = await getProvider();
 
     try {
-        const response = await fetch(`${RAG_API_URL}/graph/trace/${encodeURIComponent(entity_name)}?depth=${depth}`);
+        // 1. Get structural dependencies from Graph
+        const graphUrl = new URL(`${RAG_API_URL}/graph/trace/${encodeURIComponent(entity_name)}`);
+        graphUrl.searchParams.append("depth", depth.toString());
+        if (projectName) graphUrl.searchParams.append("project_name", projectName);
+
+        const response = await fetch(graphUrl.toString());
         if (!response.ok) {
             throw new Error(`RAG API returned ${response.status}`);
         }
         const subgraph = await response.json();
 
-        if (!subgraph.nodes || subgraph.nodes.length === 0) {
+        // 2. Get textual dependencies from Vector
+        const vectorContext = await queryRAG(`Dependencies, relations, and impact of ${entity_name}`, projectName);
+
+        if ((!subgraph.nodes || subgraph.nodes.length === 0) && !vectorContext) {
             return {
-                summary: `No dependencies found for entity: ${entity_name}`,
+                summary: `No dependencies found for entity: ${entity_name} in either graph or text.`,
                 direct_dependencies: [],
                 affected_nodes: [],
-                impact_analysis: "The entity appears to be isolated in the current knowledge graph."
+                impact_analysis: "The entity appears to be isolated."
             };
         }
 
         const prompt = `
         You are 'Nexis', a Senior System Architect.
-        Your task is to analyze a "Blast Radius" subgraph and explain the dependencies of a specific entity.
+        Your task is to analyze a "Blast Radius" using both Graph relationships and Textual documentation.
+        Explain the dependencies of the target entity.
 
         === Target Entity ===
         ${entity_name}
 
-        === Graph Subgraph (Nodes & Edges) ===
+        === Graph Subgraph (Structured Relations) ===
         Nodes: ${JSON.stringify(subgraph.nodes)}
         Edges: ${JSON.stringify(subgraph.edges)}
+
+        === Textual Context (Unstructured Evidence) ===
+        ${vectorContext || "No specific mentions found in documents."}
         
         === Analysis Instructions ===
-        1. Identify direct dependencies (nodes directly connected to the target).
-        2. Identify indirect dependencies (nodes connected via 2+ hops).
+        1. Identify direct/indirect dependencies from BOTH graph edges and textual mentions.
+        2. Identify "Hidden Dependencies": Things mentioned in text but not yet modeled in the graph.
         3. Provide an Impact Analysis: If this entity's logic were to change, which other parts of the system are most at risk?
         4. Synthesize the findings into a clear, professional summary.
 
-        Return ONLY valid JSON matching this schema:
+        Return ONLY valid JSON:
         {
-            "summary": "Clear explanation of the entity's role and its primary connections.",
-            "direct_dependencies": ["Node A (Relation X)", "Node B (Relation Y)"],
-            "affected_nodes": ["Node C", "Node D"],
-            "impact_analysis": "Detailed breakdown of the potential 'Blast Radius' if this entity is modified."
+            "summary": "Clear explanation of the entity's role and its connections.",
+            "direct_dependencies": ["Node A (Relation X)", "Mentioned in Source Y..."],
+            "affected_nodes": ["Node C", "Module D"],
+            "impact_analysis": "Detailed breakdown of the potential 'Blast Radius'."
         }
         `;
 
@@ -117,8 +162,7 @@ export async function traceDependencies(input: TraceDependenciesInput): Promise<
         }
 
         const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        const jsonResult = JSON.parse(cleanText) as TraceReport;
-        return jsonResult;
+        return JSON.parse(cleanText) as TraceReport;
 
     } catch (e) {
         console.error("Trace Tool Failed:", e);

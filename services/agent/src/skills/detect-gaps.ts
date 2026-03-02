@@ -78,9 +78,11 @@ async function queryRAG(query: string, projectName?: string): Promise<string> {
     }
 }
 
-async function getGraphContext(entityName: string): Promise<string> {
+async function getGraphContext(entityName: string, projectName?: string): Promise<string> {
     try {
-        const response = await fetch(`${RAG_API_URL}/graph/trace/${encodeURIComponent(entityName)}?depth=2`);
+        const url = new URL(`${RAG_API_URL}/graph/trace/${encodeURIComponent(entityName)}`);
+        if (projectName) url.searchParams.append("project_name", projectName);
+        const response = await fetch(url.toString());
         if (response.ok) {
             const subgraph = await response.json();
             return JSON.stringify(subgraph);
@@ -110,7 +112,7 @@ export async function detectGaps(input: DetectGapsInput): Promise<GapReport> {
 
     // 1. Gather deep context
     const vectorContext = await queryRAG(`Detailed business logic, constraints, and error handling for ${target_area}`, projectName);
-    const graphContext = await getGraphContext(target_area);
+    const graphContext = await getGraphContext(target_area, projectName);
 
     const prompt = `
     You are 'Nexis', a Master Business Architect and Logic Auditor.

@@ -465,10 +465,10 @@ def query_graph(search_term, domain_id=None, project_name=None):
     return results
 
 @app.get("/graph/trace/{entity_name}")
-async def trace_graph_dependencies(entity_name: str, depth: int = 2):
+async def trace_graph_dependencies(entity_name: str, depth: int = 2, project_name: Optional[str] = None, domain_id: Optional[str] = None):
     """
     Returns a subgraph of nodes and relationships connected to the given entity.
-    Used for 'Blast Radius' analysis.
+    Used for 'Blast Radius' analysis. Supports scoping by project and domain.
     """
     if not neo4j_driver:
         return {"nodes": [], "edges": []}
@@ -478,18 +478,29 @@ async def trace_graph_dependencies(entity_name: str, depth: int = 2):
     
     try:
         with neo4j_driver.session() as session:
-            # Query to get entity and its neighbors up to N depth
-            query = """
-            MATCH (start:Entity)
-            WHERE toLower(start.name) = toLower($name)
-            MATCH (start)-[r*1..%d]-(neighbor:Entity)
-            // Filter out common metadata relationships
-            WHERE ALL(rel IN r WHERE type(rel) <> 'MENTIONED_IN' AND type(rel) <> 'BELONGS_TO' AND type(rel) <> 'IN_DOMAIN')
-            RETURN start, r, neighbor
-            LIMIT 50
-            """ % depth
+            # Construction of scoping filters
+            project_match = ""
+            if project_name:
+                project_match = "MATCH (start)-[:MENTIONED_IN]->(d:Document) WHERE d.projectName CONTAINS $project_name"
             
-            result = session.run(query, name=entity_name)
+            domain_match = ""
+            if domain_id:
+                domain_match = "MATCH (start)-[:IN_DOMAIN]->(:Domain {id: $domain_id})"
+
+            # Query to get entity and its neighbors up to N depth
+            query = f"""
+            MATCH (start:Entity)
+            WHERE toLower(start.name) CONTAINS toLower($name)
+            {project_match}
+            {domain_match}
+            MATCH (start)-[r*1..{depth}]-(neighbor:Entity)
+            // Filter out common metadata relationships
+            WHERE ALL(rel IN r WHERE type(rel) <> 'MENTIONED_IN' AND type(rel) <> 'BELONGS_TO' AND type(rel) <> 'IN_DOMAIN' AND type(rel) <> 'PART_OF')
+            RETURN start, r, neighbor
+            LIMIT 100
+            """
+            
+            result = session.run(query, name=entity_name, project_name=project_name, domain_id=domain_id)
             
             seen_nodes = set()
             seen_edges = set()
