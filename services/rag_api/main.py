@@ -48,6 +48,8 @@ NEO4J_USER = os.getenv('NEO4J_USER', 'neo4j')
 NEO4J_PASSWORD = os.getenv('NEO4J_PASSWORD', 'nexis_password')
 REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
 REDIS_PORT = int(os.getenv('REDIS_PORT', 6380))
+UPLOAD_DIR = os.getenv('UPLOAD_DIR', '/app/raw_docs')
+PROCESSED_DIR = os.getenv('KNOWLEDGE_DIR', '/app/processed_docs')
 
 import redis
 try:
@@ -462,6 +464,67 @@ def query_graph(search_term, domain_id=None, project_name=None):
         
     return results
 
+@app.get("/graph/trace/{entity_name}")
+async def trace_graph_dependencies(entity_name: str, depth: int = 2):
+    """
+    Returns a subgraph of nodes and relationships connected to the given entity.
+    Used for 'Blast Radius' analysis.
+    """
+    if not neo4j_driver:
+        return {"nodes": [], "edges": []}
+    
+    nodes = []
+    edges = []
+    
+    try:
+        with neo4j_driver.session() as session:
+            # Query to get entity and its neighbors up to N depth
+            query = """
+            MATCH (start:Entity)
+            WHERE toLower(start.name) = toLower($name)
+            MATCH (start)-[r*1..%d]-(neighbor:Entity)
+            // Filter out common metadata relationships
+            WHERE ALL(rel IN r WHERE type(rel) <> 'MENTIONED_IN' AND type(rel) <> 'BELONGS_TO' AND type(rel) <> 'IN_DOMAIN')
+            RETURN start, r, neighbor
+            LIMIT 50
+            """ % depth
+            
+            result = session.run(query, name=entity_name)
+            
+            seen_nodes = set()
+            seen_edges = set()
+            
+            for record in result:
+                start_node = record["start"]
+                neighbor_node = record["neighbor"]
+                relationships = record["r"]
+                
+                for n in [start_node, neighbor_node]:
+                    if n.id not in seen_nodes:
+                        nodes.append({
+                            "id": n.id,
+                            "name": n.get("name"),
+                            "type": list(n.labels)[0] if n.labels else "Entity",
+                            "properties": dict(n)
+                        })
+                        seen_nodes.add(n.id)
+                
+                for rel in relationships:
+                    rel_id = f"{rel.start_node.id}-{rel.type}-{rel.end_node.id}"
+                    if rel_id not in seen_edges:
+                        edges.append({
+                            "source": rel.start_node.id,
+                            "target": rel.end_node.id,
+                            "type": rel.type,
+                            "properties": dict(rel)
+                        })
+                        seen_edges.add(rel_id)
+                        
+            return {"nodes": nodes, "edges": edges}
+    except Exception as e:
+        print(f"Graph trace error: {e}")
+        return {"nodes": [], "edges": [], "error": str(e)}
+
 @app.get("/documents")
 async def get_documents(db: Session = Depends(get_db)):
     docs = db.query(Document).filter(Document.status != "ARCHIVED").order_by(Document.createdAt.desc()).all()
@@ -482,6 +545,49 @@ async def get_documents(db: Session = Depends(get_db)):
             "updatedAt": d.updatedAt.isoformat()
         })
     return res
+
+@app.get("/projects/{project_name}/versions")
+async def get_project_versions(project_name: str, db: Session = Depends(get_db)):
+    """
+    Returns all document versions for a specific project.
+    """
+    docs = db.query(Document).filter(
+        Document.projectName.ilike(f"%{project_name}%"),
+        Document.status != "ARCHIVED"
+    ).order_by(Document.version.desc()).all()
+    
+    return [
+        {
+            "id": d.id,
+            "filename": d.filename,
+            "version": d.version,
+            "projectName": d.projectName,
+            "status": d.status,
+            "createdAt": d.createdAt.isoformat()
+        } for d in docs
+    ]
+
+@app.get("/documents/{doc_id}/content")
+async def get_document_content(doc_id: str, db: Session = Depends(get_db)):
+    """
+    Returns the processed markdown content of a document by its ID.
+    """
+    doc = db.query(Document).filter(Document.id == doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+        
+    name, _ = os.path.splitext(doc.filename)
+    kb_path = os.path.join(PROCESSED_DIR, f"{name}.md")
+    
+    if not os.path.exists(kb_path):
+        raise HTTPException(status_code=404, detail=f"Processed markdown not found at {kb_path}")
+        
+    try:
+        with open(kb_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            return {"id": doc_id, "filename": doc.filename, "version": doc.version, "content": content}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read file: {str(e)}")
 
 @app.put("/documents/{doc_id}/archive")
 async def archive_document(doc_id: str, db: Session = Depends(get_db)):

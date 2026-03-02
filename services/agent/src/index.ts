@@ -12,6 +12,8 @@ import * as readline from 'readline';
 import { checkConflict } from './skills/conflict-checker';
 import { withdrawSkill } from './skills/withdraw-skill';
 import { retrieveKnowledge } from './skills/retrieve-knowledge'; // [NEW]
+import { compareRequirementsDeclaration, compareRequirements } from './skills/compare-requirements';
+import { traceDependenciesDeclaration, traceDependencies } from './skills/trace-dependencies';
 
 // --- Configuration ---
 const API_KEY = process.env.GEMINI_API_KEY;
@@ -121,7 +123,9 @@ const tools: FunctionDeclaration[] = [
             type: SchemaType.OBJECT,
             properties: {},
         }
-    }
+    },
+    compareRequirementsDeclaration,
+    traceDependenciesDeclaration
 ];
 
 // --- Main Agent Loop ---
@@ -211,6 +215,10 @@ async function main() {
                         toolResult = updateKnowledge(args);
                     } else if (name === "get_knowledge") {
                         toolResult = { content: loadKnowledge() };
+                    } else if (name === "compare_requirements") {
+                        toolResult = await compareRequirements(args);
+                    } else if (name === "trace_dependencies") {
+                        toolResult = await traceDependencies(args);
                     } else {
                         toolResult = { error: `Unknown tool: ${name}` };
                     }

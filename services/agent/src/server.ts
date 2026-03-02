@@ -22,6 +22,8 @@ import { writeSubgraphDeclaration, writeSubgraph } from './skills/ingest-write-s
 import { reviewTaxonomyQueueDeclaration, reviewTaxonomyQueue } from './skills/review-taxonomy-queue';
 import { simulateImpactDeclaration, simulateImpact } from './skills/simulate-impact';
 import { draftPrdDeclaration, draftPrd } from './skills/draft-prd';
+import { compareRequirementsDeclaration, compareRequirements } from './skills/compare-requirements';
+import { traceDependenciesDeclaration, traceDependencies } from './skills/trace-dependencies';
 import { prisma } from './db';
 
 // --- Configuration ---
@@ -142,7 +144,9 @@ const tools: FunctionDeclaration[] = [
     reviewTaxonomyQueueDeclaration,
     // --- Copilot Pipeline Tools ---
     simulateImpactDeclaration,
-    draftPrdDeclaration
+    draftPrdDeclaration,
+    compareRequirementsDeclaration,
+    traceDependenciesDeclaration
 ];
 
 // --- Express Server ---
@@ -434,6 +438,10 @@ NEVER attempt to write or draft a PRD directly in the chat response. You MUST AL
                             toolResult = await simulateImpact({ ...args, projectName });
                         } else if (name === "draft_prd") {
                             toolResult = await draftPrd(args);
+                        } else if (name === "compare_requirements") {
+                            toolResult = await compareRequirements(args);
+                        } else if (name === "trace_dependencies") {
+                            toolResult = await traceDependencies(args);
                         } else {
                             toolResult = { error: `Unknown tool: ${name}` };
                         }
@@ -522,6 +530,10 @@ NEVER attempt to write or draft a PRD directly in the chat response. You MUST AL
                             toolResult = await simulateImpact({ ...args, projectName });
                         } else if (name === "draft_prd") {
                             toolResult = await draftPrd(args);
+                        } else if (name === "compare_requirements") {
+                            toolResult = await compareRequirements(args);
+                        } else if (name === "trace_dependencies") {
+                            toolResult = await traceDependencies(args);
                         } else {
                             toolResult = { error: `Unknown tool: ${name}` };
                         }
