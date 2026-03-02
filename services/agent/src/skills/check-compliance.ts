@@ -22,7 +22,7 @@ export interface ComplianceReport {
 
 export const checkComplianceDeclaration: FunctionDeclaration = {
     name: "check_compliance",
-    description: "Compliance Check Tool: Validates a new requirement or feature against the global business rules, security policies, and architectural standards stored in the knowledge base. Use this to ensure new proposals don't violate existing constraints.",
+    description: "Compliance Check Tool: Validates a requirement against safety policies, security standards, regulatory rules, and global business constraints. Use this specifically when the user asks about 'compliance' (合规性), 'security' (安全性), or 'business norms' (业务规范).",
     parameters: {
         type: SchemaType.OBJECT,
         properties: {

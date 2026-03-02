@@ -20,7 +20,7 @@ export interface ImpactReport {
 
 export const simulateImpactDeclaration: FunctionDeclaration = {
     name: "simulate_impact",
-    description: "Sandbox Feasibility Tool: Analyzes a Product Manager's proposed new feature, process change, or 'what if' scenario against the existing Knowledge Base (Vector + Graph) to identify affected modules, broken rules, and missing fields. ALWAYS use this when the user asks if something 'can be realized' (可以实现吗), proposes a new idea, or asks for a PRD.",
+    description: "Sandbox Feasibility Tool: Technical analysis of a new feature proposal to identify affected modules, APIs, and missing technical prerequisites. Use this when the user asks about 'feasibility' (实现可能性), 'impact' (影响面), or when proposing a general plan (方案).",
     parameters: {
         type: SchemaType.OBJECT,
         properties: {
