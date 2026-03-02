@@ -330,7 +330,8 @@ class DashScopeEmbeddingFunction(EmbeddingFunction):
     def __init__(self, api_key, model_name="text-embedding-v4"):
         self.client = OpenAI(
             api_key=api_key,
-            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
+            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            timeout=30.0
         )
         self.model_name = model_name
 
@@ -343,6 +344,7 @@ class DashScopeEmbeddingFunction(EmbeddingFunction):
         all_embeddings = []
         for i in range(0, len(input), batch_size):
             batch = input[i:i + batch_size]
+            print(f"[DIAGNOSTIC] RAG API: Embedding batch {i//batch_size + 1} via DashScope...")
             response = self.client.embeddings.create(
                 model=self.model_name,
                 input=batch
