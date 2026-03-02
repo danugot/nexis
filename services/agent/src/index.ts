@@ -17,6 +17,7 @@ import { traceDependenciesDeclaration, traceDependencies } from './skills/trace-
 import { checkComplianceDeclaration, checkCompliance } from './skills/check-compliance';
 import { generateTestsDeclaration, generateTests } from './skills/generate-tests';
 import { detectGapsDeclaration, detectGaps } from './skills/detect-gaps';
+import { explainLineageDeclaration, explainLineage } from './skills/explain-lineage';
 
 // --- Configuration ---
 const API_KEY = process.env.GEMINI_API_KEY;
@@ -131,7 +132,8 @@ const tools: FunctionDeclaration[] = [
     traceDependenciesDeclaration,
     checkComplianceDeclaration,
     generateTestsDeclaration,
-    detectGapsDeclaration
+    detectGapsDeclaration,
+    explainLineageDeclaration
 ];
 
 // --- Main Agent Loop ---
@@ -231,6 +233,8 @@ async function main() {
                         toolResult = await generateTests(args);
                     } else if (name === "detect_gaps") {
                         toolResult = await detectGaps(args);
+                    } else if (name === "explain_lineage") {
+                        toolResult = await explainLineage(args);
                     } else {
                         toolResult = { error: `Unknown tool: ${name}` };
                     }

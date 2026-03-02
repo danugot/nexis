@@ -27,6 +27,7 @@ import { traceDependenciesDeclaration, traceDependencies } from './skills/trace-
 import { checkComplianceDeclaration, checkCompliance } from './skills/check-compliance';
 import { generateTestsDeclaration, generateTests } from './skills/generate-tests';
 import { detectGapsDeclaration, detectGaps } from './skills/detect-gaps';
+import { explainLineageDeclaration, explainLineage } from './skills/explain-lineage';
 import { prisma } from './db';
 
 // --- Configuration ---
@@ -152,7 +153,8 @@ const tools: FunctionDeclaration[] = [
     traceDependenciesDeclaration,
     checkComplianceDeclaration,
     generateTestsDeclaration,
-    detectGapsDeclaration
+    detectGapsDeclaration,
+    explainLineageDeclaration
 ];
 
 // --- Express Server ---
@@ -454,6 +456,8 @@ NEVER attempt to write or draft a PRD directly in the chat response. You MUST AL
                             toolResult = await generateTests({ ...args, projectName });
                         } else if (name === "detect_gaps") {
                             toolResult = await detectGaps({ ...args, projectName });
+                        } else if (name === "explain_lineage") {
+                            toolResult = await explainLineage({ ...args, projectName });
                         } else {
                             toolResult = { error: `Unknown tool: ${name}` };
                         }
@@ -552,6 +556,8 @@ NEVER attempt to write or draft a PRD directly in the chat response. You MUST AL
                             toolResult = await generateTests({ ...args, projectName });
                         } else if (name === "detect_gaps") {
                             toolResult = await detectGaps({ ...args, projectName });
+                        } else if (name === "explain_lineage") {
+                            toolResult = await explainLineage({ ...args, projectName });
                         } else {
                             toolResult = { error: `Unknown tool: ${name}` };
                         }
