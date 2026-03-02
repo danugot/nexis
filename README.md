@@ -1,88 +1,113 @@
-# Nexis v2.8 - Intelligent Enterprise RAG System
+# Nexis (Next-Gen Intelligent System)
 
-Nexis is an advanced Business Logic Verification System powered by Agentic AI, GraphRAG, and ReAct patterns.
+> **Nexis 是一个基于图增强检索 (GraphRAG)、多代理协作 (Agentic Workflow) 和架构仿真推演的企业级知识生命周期管理系统。**
 
-## Architecture (Standardized)
+Nexis 不仅仅是一个 RAG (检索增强生成) 工具，它是一个“业务架构师助手”。它能够从数以百计的 PRD 文档中提取复杂的业务逻辑，构建结构化的知识图谱，并允许用户在“仿真沙盒”中推演新需求的影响。
 
-The project is structured as a set of microservices:
+---
 
-| Service | Path | Description | Tech Stack |
-| :--- | :--- | :--- | :--- |
-| **Agent Brain** | `services/agent/` | The core ReAct Agent that reasons and executes tasks. | TypeScript, Node.js, Google GenAI |
-| **RAG API** | `services/rag_api/` | Retrieval Augmented Generation Service (Vector + Graph). | Python, FastAPI, ChromaDB, Neo4j |
-| **Ingestion Worker** | `services/worker/` | Asynchronous document processing and Knowledge Graph construction. | Python, Redis, Google GenAI (Extraction) |
-| **Infrastructure** | `docker-compose.yml` | Orchestrates Redis, ChromaDB, Neo4j, and Python Services. | Docker Compose |
+## 🚀 核心特性
 
-## Getting Started
+- **Graph-RAG 双引擎检索**: 结合向量搜索 (ChromaDB) 的模糊语义匹配与知识图谱 (Neo4j) 的多跳逻辑关联，精准找回跨文档的业务链路。
+- **架构沙盘推演 (Simulate Impact)**: 自动分析新需求提案的可行性，预判对现有模块的冲击，识别潜在的逻辑冲突（Broken Rules）。
+- **自动化 PRD 起草 (Draft PRD)**: 基于架构推演结果，一键生成标准化的中文 PRD 文档，提供 Markdown 级富文本排版。
+- **自动化分类治理 (Taxonomy Consolidation)**: 内置 Map-Reduce 逻辑，自动合并冗余的知识分类建议，保持知识库长久整洁。
+- **混合模型策略**: 深度适配阿里巴巴通义千问 (Qwen) `text-embedding-v3` 进行高精度中文向量化，并支持大规模推理与思考模型。
 
-### Prerequisites
-- Docker & Docker Compose
-- Node.js v18+ (for local Agent dev)
-- Python 3.9+ (for local Service dev)
+---
 
-### Quick Start (Docker)
+## 🏗️ 系统架构
 
-1.  **Configure Environment**:
-    Ensure `.env` exists in the root directory with keys:
-    ```bash
-    GEMINI_API_KEY=...
-    NEO4J_PASSWORD=nexis_password
-    # ... other config ...
-    ```
-
-2.  **Launch Stack**:
-    ```bash
-    docker-compose up -d --build
-    ```
-    This starts:
-    - **Neo4j** (Graph DB) on `localhost:7474` / `7687`
-    - **ChromaDB** (Vector DB) on `localhost:8000`
-    - **Redis** (Queue) on `localhost:6379`
-    - **RAG API** on `localhost:8001`
-    - **Worker** (Background Processing)
-
-3.  **Run Agent (Interactive)**:
-    Since the Agent is an interactive CLI, run it locally:
-    ```bash
-    cd services/agent
-    npm install
-    npm start
-    ```
-
-### Local Development (Recommended: `uv`)
-
-This project uses `uv` for fast Python package management and environment isolation.
-
-1.  **Install `uv`** (if not installed):
-    ```bash
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-    ```
-
-2.  **Setup Environment**:
-    ```bash
-    # Create venv with Python 3.11 (Required for MarkItDown)
-    uv venv .venv --python 3.11
+```mermaid
+graph TD
+    User((用户)) <--> UI[Web UI - React/Vite]
+    UI <--> Agent[Agent Brain - Node.js/ReAct]
     
-    # Install dependencies
-    uv pip install -r services/rag_api/requirements.txt -r services/worker/requirements.txt
-    ```
-
-3.  **Run Services**:
-    You can use the helper script:
-    ```bash
-    ./start_services.sh
-    ```
+    subgraph "核心智能层"
+        Agent <--> Skills[Skills Executor]
+        Skills --> S1[retrieve_knowledge]
+        Skills --> S2[simulate_impact]
+        Skills --> S3[draft_prd]
+    end
     
-    Or run individually:
-    ```bash
-    # RAG API
-    .venv/bin/python services/rag_api/main.py
+    subgraph "知识基础设施 (FastAPI)"
+        S1 & S2 <--> RAG_API[RAG Service]
+        RAG_API <--> Vector[ChromaDB - Vectors]
+        RAG_API <--> Graph[Neo4j - Knowledge Graph]
+        RAG_API <--> DB[PostgreSQL - Meta/History]
+    end
+    
+    subgraph "数据摄取流水线"
+        Docs[PRD/Docs] --> Worker[Ingestion Worker]
+        Worker --> Vector
+        Worker --> Graph
+    end
+```
 
-    # Worker
-    .venv/bin/python services/worker/main.py
-    ```
+---
 
-## Features
-- **Hybrid Retrieval**: Combines Vector Similarity with Knowledge Graph Traversal.
-- **Auto-Ingestion**: Drop files into `raw_docs/` (or queue) -> Auto-processed by Worker.
-- **ReAct Loop**: Agent actively retrieves context before answering constraints.
+## 🛠️ 技术栈
+
+| 模块 | 技术栈 |
+| :--- | :--- |
+| **前端 (Web UI)** | React 19, Vite, TailwindCSS, Shadcn UI, Lucide Icons |
+| **代理大脑 (Agent)** | Node.js, TypeScript, AI SDK / ReAct Pattern |
+| **后端 API (RAG)** | Python 3.10+, FastAPI, SQLAlchemy |
+| **向量数据库** | ChromaDB (搭配 Dashscope `text-embedding-v3`) |
+| **图数据库** | Neo4j 5.x |
+| **持久化与缓存** | PostgreSQL 15, Redis 7.0 |
+
+---
+
+## 📦 快速启动
+
+### 1. 配置环境
+在根目录下创建 `.env` 文件，填入必要的 API 密钥：
+```env
+GEMINI_API_KEY=your_gemini_key
+DASHSCOPE_API_KEY=your_qwen_key
+NEO4J_PASSWORD=nexis_password
+```
+
+### 2. 一键启动
+我们提供了便捷的脚本进行全量部署：
+```bash
+./manage.sh start
+```
+该命令会自动构建并启动所有 Docker 容器（Postgres, Redis, Neo4j, Chroma, RAG API, Agent, Web UI）。
+
+### 3. 进入系统
+- **Web 访问**: [http://localhost:5173](http://localhost:5173)
+- **管理后台**: [http://localhost:5173/admin](http://localhost:5173/admin)
+- **图谱预览**: [http://localhost:5173/graph](http://localhost:5173/graph)
+
+---
+
+## 📖 核心技能使用场景
+
+### 1. 业务流程检索
+问：“出票的核心流程有哪些？”
+> 助手将通过 Neo4j 顺着 `NEXT_STEP` 关系，为您梳理出从出票登记到票据签收的完整路径。
+
+### 2. 需求仿真推演
+问：“如果支持出票登记成功后同时发起提示承兑和提示收票，可以实现吗？”
+> 助手会触发 `simulate_impact` 技能，通过沙盘模拟告诉你该变更是否会破坏现有的承兑合规性。
+
+### 3. 自动化写稿
+问：“请帮我起草刚才那个提案的 PRD。”
+> 助手会根据推演出的受影响模块和变更逻辑，自动编写一份精美的中文 PRD Markdown 文档。
+
+---
+
+## 🌍 系统迁移与远程部署
+
+本系统已深度适配容器化环境。若需部署到本地服务器（如 Mac mini）并通过 Cloudflare 进行远程访问：
+1.  参考 [Migration Guide](./brain/migration_guide.md) 进行数据卷备份与恢复。
+2.  更新 `docker-compose.yml` 中的 `VITE_API_BASE_URL` 为相对路径或远程域名。
+3.  在 `web-ui/vite.config.ts` 中配置 `allowedHosts`。
+
+---
+
+## ⚖️ 许可证
+
+本项目基于 MIT 协议开源。
