@@ -309,7 +309,7 @@ def extract_and_ingest_graph(filename, content, domain_id=None, project_name=Non
     total_batches = len(extraction_batches)
     
     # Determine provider dynamically
-    llm_provider = os.getenv('GEMINI_MODEL', 'gemini-3-flash-preview')
+    llm_provider = os.getenv('GEMINI_MODEL', 'qwen-plus')
     if redis_client:
         try:
             val = redis_client.get("nexis:settings:llm_provider")
