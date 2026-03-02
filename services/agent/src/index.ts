@@ -13,8 +13,8 @@ import { checkConflict } from './skills/conflict-checker';
 import { withdrawSkill } from './skills/withdraw-skill';
 import { retrieveKnowledge } from './skills/retrieve-knowledge'; // [NEW]
 import { compareRequirementsDeclaration, compareRequirements } from './skills/compare-requirements';
-import { traceDependenciesDeclaration,
-    checkComplianceDeclaration, traceDependencies } from './skills/trace-dependencies';
+import { traceDependenciesDeclaration, traceDependencies } from './skills/trace-dependencies';
+import { checkComplianceDeclaration, checkCompliance } from './skills/check-compliance';
 
 // --- Configuration ---
 const API_KEY = process.env.GEMINI_API_KEY;

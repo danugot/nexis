@@ -23,8 +23,8 @@ import { reviewTaxonomyQueueDeclaration, reviewTaxonomyQueue } from './skills/re
 import { simulateImpactDeclaration, simulateImpact } from './skills/simulate-impact';
 import { draftPrdDeclaration, draftPrd } from './skills/draft-prd';
 import { compareRequirementsDeclaration, compareRequirements } from './skills/compare-requirements';
-import { traceDependenciesDeclaration,
-    checkComplianceDeclaration, traceDependencies } from './skills/trace-dependencies';
+import { traceDependenciesDeclaration, traceDependencies } from './skills/trace-dependencies';
+import { checkComplianceDeclaration, checkCompliance } from './skills/check-compliance';
 import { prisma } from './db';
 
 // --- Configuration ---
