@@ -2,16 +2,19 @@ import { GoogleGenerativeAI, FunctionDeclaration, SchemaType } from "@google/gen
 import OpenAI from "openai";
 import * as dotenv from "dotenv";
 import { simulateImpact } from "./simulate-impact";
+import { saveReport } from "../utils/persistence";
 
 dotenv.config();
 
 export interface DraftPrdInput {
     proposal: string;
     impact_report?: any; // the JSON report from simulate_impact
+    projectName?: string;
 }
 
 export interface DraftPrdResult {
     prd_markdown: string;
+    saved_path?: string;
 }
 
 export const draftPrdDeclaration: FunctionDeclaration = {
@@ -105,7 +108,13 @@ export async function draftPrd(input: DraftPrdInput): Promise<DraftPrdResult> {
             text = result.response.text();
         }
 
-        return { prd_markdown: text.trim().replace(/^```markdown/g, '').replace(/```$/g, '').trim() };
+        const prdContent = text.trim().replace(/^```markdown/g, '').replace(/```$/g, '').trim();
+        const savedPath = saveReport('DraftPRD', prdContent, input.projectName);
+
+        return {
+            prd_markdown: prdContent,
+            saved_path: savedPath
+        };
 
     } catch (e) {
         console.error("PRD Drafter LLM (" + provider + ") Failed:", e);

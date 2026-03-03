@@ -5,6 +5,7 @@ import { traceDependencies } from './trace-dependencies';
 import { detectGaps } from './detect-gaps';
 import { simulateImpact } from './simulate-impact';
 import { checkConflict } from './conflict-checker';
+import { saveReport } from '../utils/persistence';
 
 export const analyzeRequirementDeclaration: FunctionDeclaration = {
     name: "analyze_requirement",
@@ -71,7 +72,7 @@ export async function analyzeRequirement(input: AnalyzeRequirementInput, domainI
         // In a real scenario, we might want another LLM pass to summarize these together,
         // but for now, we return a structured object that the UI can render as Tabs.
 
-        return {
+        const masterReport = {
             verdict: "ANALYZED",
             timestamp: new Date().toISOString(),
             projectName,
@@ -82,6 +83,21 @@ export async function analyzeRequirement(input: AnalyzeRequirementInput, domainI
                 gaps: gaps,
                 impact: impact
             }
+        };
+
+        const markdownContent = `# Architect Report: ${projectName}\n\n` +
+            `**Date:** ${masterReport.timestamp}\n` +
+            `**Status:** ${masterReport.summary}\n\n` +
+            `## Compliance\n\`\`\`json\n${JSON.stringify(compliance, null, 2)}\n\`\`\`\n\n` +
+            `## Dependencies\n\`\`\`json\n${JSON.stringify(dependencies, null, 2)}\n\`\`\`\n\n` +
+            `## Gaps\n\`\`\`json\n${JSON.stringify(gaps, null, 2)}\n\`\`\`\n\n` +
+            `## Impact Simulation\n\`\`\`json\n${JSON.stringify(impact, null, 2)}\n\`\`\``;
+
+        const savedPath = saveReport('ArchitectReport', markdownContent, projectName);
+
+        return {
+            ...masterReport,
+            saved_path: savedPath
         };
 
     } catch (error: any) {

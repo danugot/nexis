@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI, FunctionDeclaration, SchemaType } from "@google/generative-ai";
 import OpenAI from "openai";
 import * as dotenv from "dotenv";
+import { saveReport } from "../utils/persistence";
 
 dotenv.config();
 
@@ -165,7 +166,23 @@ export async function generateTests(input: GenerateTestsInput): Promise<TestRepo
         }
 
         const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        return JSON.parse(cleanText) as TestReport;
+        const report = JSON.parse(cleanText) as TestReport;
+
+        let markdownCases = `# Test Scenarios: ${feature_name}\n\n**Summary:** ${report.summary}\n\n`;
+        report.test_cases.forEach((tc, index) => {
+            markdownCases += `## ${index + 1}. ${tc.title}\n`;
+            markdownCases += `**Scenario:** ${tc.scenario}\n`;
+            markdownCases += `**Steps:**\n`;
+            tc.steps.forEach(step => markdownCases += `- ${step}\n`);
+            markdownCases += `**Expected:** ${tc.expected_result}\n\n`;
+        });
+
+        const savedPath = saveReport('TestCases', markdownCases, projectName);
+
+        return {
+            ...report,
+            saved_path: savedPath
+        } as any; // Cast because TestReport interface doesn't have saved_path yet
 
     } catch (e) {
         console.error("Test Generation Failed:", e);
