@@ -44,15 +44,13 @@ flowchart TB
         Router <--> Dispatcher
     end
 
-    subgraph SkillsLayer ["🛠️ Intelligence Layer (Skills Ecosystem)"]
+    subgraph SkillsLayer ["🛠️ Intelligence Layer (Mega-Tools)"]
         direction LR
-        S_Audit["<b>🏗️ 1. Architect & Impact Core</b><br/>━━━━━━━━━━━━━━━━━━━━━━━<br/>🔹 requirement-analyzer<br/>🔹 dependency-impact-analyzer"]:::skill
+        S_Req["<b>🎯 Requirement Analyzer</b><br/>(Analyze / Gaps / Compliance / Conflict)"]:::skill
+        S_Impact["<b>🕸️ Dependency Impact Analyzer</b><br/>(Trace / Simulate / Lineage)"]:::skill
+        S_Knowledge["<b>📚 Knowledge Orchestrator</b><br/>(Taxonomy / Subgraph / Document)"]:::skill
         
-        S_Gen["<b>✨ 2. Generative Action</b><br/>━━━━━━━━━━━━━━━━━━━<br/>🔸 draft-prd<br/>🔸 generate-tests<br/>🔸 withdraw-skill"]:::skill
-        
-        S_Anal["<b>🔍 3. Retrieval & State</b><br/>━━━━━━━━━━━━━━━━━━━━<br/>🔎 retrieve-knowledge<br/>🔎 update-knowledge<br/>🔎 get-knowledge"]:::skill
-        
-        S_Ingest["<b>📦 4. Ingestion & Graph Building</b><br/>━━━━━━━━━━━━━━━━━━━━━━━<br/>📚 knowledge-orchestrator<br/>📚 review-taxonomy-queue<br/>📚 get-document-content"]:::skill
+        S_Utils["<b>⚙️ Core Utils</b><br/>(Retrieve / Draft PRD / Generate Tests)"]:::skill
     end
 
     subgraph InfraLayer ["🗄️ Knowledge Infrastructure Layer"]
@@ -74,15 +72,15 @@ flowchart TB
     User <-->|Interacts| UI
     UI <-->|HTTP / WS| Brain
     
-    Dispatcher ===>|Routes to| S_Audit
-    Dispatcher ===>|Routes to| S_Gen
-    Dispatcher ===>|Routes to| S_Anal
-    Dispatcher ===>|Routes to| S_Ingest
+    Dispatcher ===>|Routes to| S_Req
+    Dispatcher ===>|Routes to| S_Impact
+    Dispatcher ===>|Routes to| S_Knowledge
+    Dispatcher ===>|Routes to| S_Utils
 
-    S_Audit -.->|Verify Rules| RAG
-    S_Gen -.->|Produce Content| RAG
-    S_Anal -.->|Search Data| RAG
-    S_Ingest -.->|Write Graph| RAG
+    S_Req -.->|Verify Rules| RAG
+    S_Impact -.->|Graph Sandbox| RAG
+    S_Knowledge -.->|Write Graph| RAG
+    S_Utils -.->|Search & Format| RAG
 
     %% Custom Subgraph Styles
     style AgentLayer fill:#f0fdf4,stroke:#86efac,stroke-width:2px,stroke-dasharray: 4
