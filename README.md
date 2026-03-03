@@ -23,60 +23,70 @@ Nexis is more than just a RAG (Retrieval-Augmented Generation) tool; it’s a "B
 ## 🏗️ System Architecture
 
 ```mermaid
-graph TD
-    User((User & Documents)) <--> UI[Web UI - React/Vite]
-    UI <--> Agent[Agent Brain - Node.js/ReAct]
-    
-    subgraph "🤖 Intelligence Layer (Agent Skills)"
-        Agent <--> Skills[Skill Dispatcher]
-        
-        subgraph "1. Architect Audit Core"
-            S1_1[analyze-requirement]
-            S1_2[check-compliance]
-            S1_3[simulate-impact]
-            S1_4[trace-dependencies]
-            S1_5[detect-gaps]
-        end
-        
-        subgraph "2. Generative Action"
-            S2_1[draft-prd]
-            S2_2[generate-tests]
-            S2_3[withdraw-skill]
-        end
+flowchart TB
+    %% Colors and Styles
+    classDef client fill:#7c3aed,stroke:#5b21b6,stroke-width:2px,color:#fff
+    classDef system fill:#2563eb,stroke:#1d4ed8,stroke-width:2px,color:#fff
+    classDef agent fill:#059669,stroke:#047857,stroke-width:2px,color:#fff
+    classDef skill fill:#ffffff,stroke:#cbd5e1,stroke-width:1px,color:#1e293b,text-align:left
+    classDef backend fill:#d97706,stroke:#b45309,stroke-width:2px,color:#fff
+    classDef storage fill:#dc2626,stroke:#b91c1c,stroke-width:2px,color:#fff
 
-        subgraph "3. Retrieval & Analysis"
-            S3_1[retrieve-knowledge]
-            S3_2[compare-requirements]
-            S3_3[conflict-checker]
-            S3_4[explain-lineage]
-            S3_5[update-knowledge]
-        end
+    User(("👤 Users & Documents")):::client
+    UI["💻 Web Interface (React / Vite)"]:::system
 
-        subgraph "4. Ingestion & Graph Building"
-            S4_1[ingest-write-subgraph]
-            S4_2[get-document-content]
-            S4_3[ingest-get-taxonomy]
-            S4_4[ingest-propose-category]
-            S4_5[review-taxonomy-queue]
-        end
-
-        Skills --> S1_1
-        Skills --> S2_1
-        Skills --> S3_1
-        Skills --> S4_1
+    subgraph AgentLayer ["🧠 Orchestration Layer (Agent Brain)"]
+        direction TB
+        Brain["🤖 Core Engine (Node.js/ReAct)"]:::agent
+        Dispatcher{"⚙️ Skill Dispatcher"}:::agent
+        Brain <--> Dispatcher
     end
-    
-    subgraph "🗄️ Knowledge Infra (FastAPI & DBs)"
-        RAG_API[Python RAG Service]
-        RAG_API <--> Vector[(ChromaDB - Vectors)]
-        RAG_API <--> Graph[(Neo4j - Knowledge Graph)]
-        RAG_API <--> DB[(PostgreSQL - History/Meta)]
+
+    subgraph SkillsLayer ["🛠️ Intelligence Layer (Skills Ecosystem)"]
+        direction LR
+        S_Audit["<b>🏗️ 1. Architect Audit Core</b><br/>━━━━━━━━━━━━━━━━━━━━━━━<br/>🔹 analyze-requirement<br/>🔹 check-compliance<br/>🔹 simulate-impact<br/>🔹 trace-dependencies<br/>🔹 detect-gaps"]:::skill
+        
+        S_Gen["<b>✨ 2. Generative Action</b><br/>━━━━━━━━━━━━━━━━━━━<br/>🔸 draft-prd<br/>🔸 generate-tests<br/>🔸 withdraw-skill"]:::skill
+        
+        S_Anal["<b>🔍 3. Retrieval & Analysis</b><br/>━━━━━━━━━━━━━━━━━━━━<br/>🔎 retrieve-knowledge<br/>🔎 compare-requirements<br/>🔎 conflict-checker<br/>🔎 explain-lineage<br/>🔎 update-knowledge"]:::skill
+        
+        S_Ingest["<b>📦 4. Ingestion & Graph Building</b><br/>━━━━━━━━━━━━━━━━━━━━━━━<br/>📚 ingest-write-subgraph<br/>📚 get-document-content<br/>📚 ingest-get-taxonomy<br/>📚 ingest-propose-category<br/>📚 review-taxonomy-queue"]:::skill
     end
+
+    subgraph InfraLayer ["🗄️ Knowledge Infrastructure Layer"]
+        direction TB
+        RAG["⚡ RAG Service API (Python / FastAPI)"]:::backend
+        
+        subgraph DBs [" "]
+            direction LR
+            VDB[("📊 ChromaDB<br/>(Vectors)")]:::storage
+            GDB[("🕸️ Neo4j<br/>(Graph)")]:::storage
+            RDB[("🗃️ PostgreSQL<br/>(History/Meta)")]:::storage
+        end
+        RAG <--> VDB
+        RAG <--> GDB
+        RAG <--> RDB
+    end
+
+    %% Flow Definitions
+    User <-->|Interacts| UI
+    UI <-->|HTTP / WS| Brain
     
-    %% Connections between Skills and Infra
-    S1_1 & S1_2 & S1_3 & S1_4 & S1_5 -.- RAG_API
-    S3_1 & S3_2 & S3_3 & S3_4 & S3_5 -.- RAG_API
-    S4_1 & S4_2 & S4_3 & S4_4 & S4_5 -.- RAG_API
+    Dispatcher ===>|Routes to| S_Audit
+    Dispatcher ===>|Routes to| S_Gen
+    Dispatcher ===>|Routes to| S_Anal
+    Dispatcher ===>|Routes to| S_Ingest
+
+    S_Audit -.->|Verify Rules| RAG
+    S_Gen -.->|Produce Content| RAG
+    S_Anal -.->|Search Data| RAG
+    S_Ingest -.->|Write Graph| RAG
+
+    %% Custom Subgraph Styles
+    style AgentLayer fill:#f0fdf4,stroke:#86efac,stroke-width:2px,stroke-dasharray: 4
+    style SkillsLayer fill:#f8fafc,stroke:#e2e8f0,stroke-width:2px,stroke-dasharray: 4
+    style InfraLayer fill:#fffbeb,stroke:#fde68a,stroke-width:2px,stroke-dasharray: 4
+    style DBs fill:transparent,stroke:none
 ```
 
 ---
@@ -121,16 +131,16 @@ This command automatically builds and starts all Docker containers (Postgres, Re
 ## 📖 Core Skill Scenarios
 
 ### 1. Business Process Retrieval
-Q: "What are the core processes for ticketing?"
-> The assistant uses Neo4j to follow `NEXT_STEP` relationships, outlining the complete path from ticketing registration to receipt.
+Q: "What are the core steps in the order fulfillment process?"
+> The assistant uses Neo4j to follow `NEXT_STEP` relationships, outlining the complete path from order creation to final delivery.
 
 ### 2. Requirement Simulation
-Q: "If we support initiating acceptance and collection simultaneously after registration, can this be realized?"
-> The assistant triggers the `simulate_impact` skill to tell you if the change breaks existing compliance rules.
+Q: "If we allow concurrent state processing at node B, will it cause any conflicts?"
+> The assistant triggers the `simulate_impact` skill to analyze the knowledge graph, identifying downstream dependencies and warning you if this breaks any existing compliance or data consistency rules.
 
 ### 3. Automated Drafting
-Q: "Draft a PRD for that proposal."
-> The assistant writes a professional Markdown PRD based on the identified impacts and logic changes.
+Q: "Draft a PRD for the concurrent processing proposal."
+> The assistant writes a professional Markdown PRD based on the identified impacts and logic changes, ensuring all edge cases from the simulation are documented.
 
 ---
 

@@ -135,11 +135,12 @@ export async function simulateImpact(input: SimulateImpactInput): Promise<Impact
     
     === Analysis Instructions ===
     1. Identify conflicts with existing textual rules or logic patterns.
-    2. Identify affected modules/entities from the structural graph connections (Blast Radius).
-    3. Identify "Broken Rules": Existing logic that would need updating.
-    4. Identify "Missing Prerequisites": Fields, APIs, or data that the graph shows are missing.
-    5. Evaluate overall feasibility and provide a Confidence Score (0.0 to 1.0).
-    6. IMPORTANT: You MUST output all generated text, suggestions, and rule names entirely in Simplified Chinese (简体中文).
+    2. **CRITICAL: Sequence Checking**. If the proposed feature skips or reverses an established business sequence (e.g. attempting collection before acceptance), add it to "broken_rules" as "违背既定时序原则".
+    3. Identify affected modules/entities from the structural graph connections (Blast Radius).
+    4. Identify "Broken Rules": Existing logic that would need updating.
+    5. Identify "Missing Prerequisites": Fields, APIs, or data that the graph shows are missing.
+    6. Evaluate overall feasibility and provide a Confidence Score (0.0 to 1.0). If a core sequence rule is broken, feasibility should generally be false unless explicitly handled.
+    7. IMPORTANT: You MUST output all generated text, suggestions, and rule names entirely in Simplified Chinese (简体中文).
 
     Return ONLY valid JSON:
     {

@@ -387,8 +387,12 @@ When formulating the \`query\` argument for \`retrieve_knowledge\`, DO NOT over-
 2. These are system metadata, not business concepts. Searching for them leads to infinite loops and poor performance.
 
 **Proactive Copilot Rule (CRITICAL)**:
-If the user uses "what if" scenarios (e.g., "如果支持...", "可以实现吗") to ask about adding a new capability, proposing a process change, or asking for a DRAFT PRD, you MUST immediately call \`simulate_impact\` first. Once that returns the Feasibility Impact Report, if they asked for a PRD, you MUST call \`draft_prd\` next. You are acting as an active Business Architect.
-NEVER attempt to write or draft a PRD directly in the chat response. You MUST ALWAYS use the \`draft_prd\` tool to generate it.`;
+If the user uses "what if" scenarios (e.g., "如果支持...", "可以实现吗") to ask about adding a new capability or proposing a process change:
+1. **Dependency Pre-check**: You MUST first use \`retrieve_knowledge\` to check the current rules and dependencies.
+2. **Dissonance Detection**: If the user's proposal explicitly violates a "Terminal Sequential Rule" or state flow in the retrieved PRD, you MUST start your response by pointing out the factual conflict: "【发现冲突】: 您提出的方案与现有流程不一致...". Do NOT blindly agree to a hypothetical change if the facts say otherwise.
+3. AFTER acknowledging any conflicts, if they asked to evaluate feasibility or draft a PRD, you MUST call \`simulate_impact\` and then \`draft_prd\`. You are acting as an active Business Architect, but anchored in truth.
+NEVER attempt to write or draft a PRD directly in the chat response. You MUST ALWAYS use the \`draft_prd\` tool to generate it.
+When a tool returns a \`saved_path\` for any generated report (like PRD, Architect Report, or Test Cases), you MUST inform the user exactly where it is saved using: "【文件已存档】：\`$PATH\`".`;
 
         let finalText = "";
         const executedTools = [];

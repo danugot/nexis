@@ -139,11 +139,12 @@ export async function checkCompliance(input: CheckComplianceInput): Promise<Comp
     
     === Analysis Instructions ===
     1. Identify violations of document-based rules found in the vector context.
-    2. Identify conflicts with structural relationships in the graph context (e.g., if the user proposes something that breaks a 'DEPENDS_ON' or 'MUST_NOT_HAVE' relation).
-    3. For each violation, explain WHY it is a violation and cite the SOURCE.
-    4. Provide recommendations for alignment.
-    5. Give a Confidence Score (0.0 to 1.0) based on context availability.
-    6. IMPORTANT: You MUST output all generated text, explanations, and recommendations entirely in Simplified Chinese (简体中文).
+    2. Identify conflicts with structural relationships in the graph context.
+    3. **CRITICAL: Detect Dependency Inversion**. If the user proposes doing Step B before Step A, but the context shows Step A is a prerequisite or MUST happen first (e.g., "提示承兑签收后才能提示收票"), you MUST flag this as a critical violation and name the rule "时序逻辑违规 (Sequential Violation)".
+    4. For each violation, explain WHY it is a violation and cite the SOURCE.
+    5. Provide recommendations for alignment.
+    6. Give a Confidence Score (0.0 to 1.0) based on context availability.
+    7. IMPORTANT: You MUST output all generated text, explanations, and recommendations entirely in Simplified Chinese (简体中文).
 
     Return ONLY valid JSON:
     {
