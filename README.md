@@ -46,13 +46,13 @@ flowchart TB
 
     subgraph SkillsLayer ["🛠️ Intelligence Layer (Skills Ecosystem)"]
         direction LR
-        S_Audit["<b>🏗️ 1. Architect Audit Core</b><br/>━━━━━━━━━━━━━━━━━━━━━━━<br/>🔹 analyze-requirement<br/>🔹 check-compliance<br/>🔹 simulate-impact<br/>🔹 trace-dependencies<br/>🔹 detect-gaps"]:::skill
+        S_Audit["<b>🏗️ 1. Architect & Impact Core</b><br/>━━━━━━━━━━━━━━━━━━━━━━━<br/>🔹 requirement-analyzer<br/>🔹 dependency-impact-analyzer"]:::skill
         
         S_Gen["<b>✨ 2. Generative Action</b><br/>━━━━━━━━━━━━━━━━━━━<br/>🔸 draft-prd<br/>🔸 generate-tests<br/>🔸 withdraw-skill"]:::skill
         
-        S_Anal["<b>🔍 3. Retrieval & Analysis</b><br/>━━━━━━━━━━━━━━━━━━━━<br/>🔎 retrieve-knowledge<br/>🔎 compare-requirements<br/>🔎 conflict-checker<br/>🔎 explain-lineage<br/>🔎 update-knowledge"]:::skill
+        S_Anal["<b>🔍 3. Retrieval & State</b><br/>━━━━━━━━━━━━━━━━━━━━<br/>🔎 retrieve-knowledge<br/>🔎 update-knowledge<br/>🔎 get-knowledge"]:::skill
         
-        S_Ingest["<b>📦 4. Ingestion & Graph Building</b><br/>━━━━━━━━━━━━━━━━━━━━━━━<br/>📚 ingest-write-subgraph<br/>📚 get-document-content<br/>📚 ingest-get-taxonomy<br/>📚 ingest-propose-category<br/>📚 review-taxonomy-queue"]:::skill
+        S_Ingest["<b>📦 4. Ingestion & Graph Building</b><br/>━━━━━━━━━━━━━━━━━━━━━━━<br/>📚 knowledge-orchestrator<br/>📚 review-taxonomy-queue<br/>📚 get-document-content"]:::skill
     end
 
     subgraph InfraLayer ["🗄️ Knowledge Infrastructure Layer"]
@@ -138,11 +138,11 @@ Q: "What are the core steps in the order fulfillment process?"
 
 ### 2. Requirement Simulation
 Q: "If we allow concurrent state processing at node B, will it cause any conflicts?"
-> The assistant triggers the `simulate_impact` skill to analyze the knowledge graph, identifying downstream dependencies and warning you if this breaks any existing compliance or data consistency rules.
+> The assistant triggers the `dependency-impact-analyzer` skill to analyze the knowledge graph, identifying downstream dependencies and warning you if this breaks any existing compliance or data consistency rules.
 
 ### 3. Automated Drafting
 Q: "Draft a PRD for the concurrent processing proposal."
-> The assistant writes a professional Markdown PRD based on the identified impacts and logic changes, ensuring all edge cases from the simulation are documented.
+> The assistant calls `draft_prd` to write a professional Markdown PRD based on the identified impacts and logic changes, ensuring all edge cases from the simulation are documented.
 
 ---
 

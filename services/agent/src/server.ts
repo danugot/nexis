@@ -12,23 +12,26 @@ import { GoogleGenerativeAI, FunctionDeclaration, SchemaType } from '@google/gen
 import OpenAI from 'openai';
 import Redis from 'ioredis';
 import * as fs from 'fs';
-import { checkConflict } from './skills/conflict-checker';
 import { withdrawSkill } from './skills/withdraw-skill';
 import { retrieveKnowledge } from './skills/retrieve-knowledge';
 import { updateKnowledge } from './skills/update-knowledge';
-import { getTaxonomyDeclaration, getTaxonomy } from './skills/ingest-get-taxonomy';
-import { proposeNewCategoryDeclaration, proposeNewCategory } from './skills/ingest-propose-category';
-import { writeSubgraphDeclaration, writeSubgraph } from './skills/ingest-write-subgraph';
+import { knowledgeOrchestratorDeclaration, knowledgeOrchestrator } from "./skills/knowledge-orchestrator";
+import { requirementAnalyzerDeclaration, requirementAnalyzer } from "./skills/requirement-analyzer";
+import { dependencyImpactAnalyzerDeclaration, dependencyImpactAnalyzer } from "./skills/dependency-impact-analyzer";
+
+
+
+
 import { reviewTaxonomyQueueDeclaration, reviewTaxonomyQueue } from './skills/review-taxonomy-queue';
-import { simulateImpactDeclaration, simulateImpact } from './skills/simulate-impact';
+
 import { draftPrdDeclaration, draftPrd } from './skills/draft-prd';
-import { compareRequirementsDeclaration, compareRequirements } from './skills/compare-requirements';
-import { traceDependenciesDeclaration, traceDependencies } from './skills/trace-dependencies';
-import { checkComplianceDeclaration, checkCompliance } from './skills/check-compliance';
+
+
+
 import { generateTestsDeclaration, generateTests } from './skills/generate-tests';
-import { detectGapsDeclaration, detectGaps } from './skills/detect-gaps';
-import { explainLineageDeclaration, explainLineage } from './skills/explain-lineage';
-import { analyzeRequirementDeclaration, analyzeRequirement } from './skills/analyze-requirement';
+
+
+
 import { getDocumentContentDeclaration, getDocumentContent } from './skills/get-document-content';
 import { prisma } from './db';
 
@@ -143,21 +146,14 @@ const tools: FunctionDeclaration[] = [
         }
     },
     // --- Ingestion Agent Tools ---
-    getTaxonomyDeclaration,
-    proposeNewCategoryDeclaration,
-    writeSubgraphDeclaration,
+    knowledgeOrchestratorDeclaration, // Replaces getTaxonomy, proposeNewCategory, writeSubgraph
     // --- Admin Chat Tools ---
     reviewTaxonomyQueueDeclaration,
     // --- Copilot Pipeline Tools ---
-    simulateImpactDeclaration,
+    requirementAnalyzerDeclaration, // Replaces compareRequirements, checkCompliance, detectGaps, checkConflict, analyzeRequirement
+    dependencyImpactAnalyzerDeclaration, // Replaces traceDependencies, simulateImpact, explainLineage
     draftPrdDeclaration,
-    compareRequirementsDeclaration,
-    traceDependenciesDeclaration,
-    checkComplianceDeclaration,
     generateTestsDeclaration,
-    detectGapsDeclaration,
-    explainLineageDeclaration,
-    analyzeRequirementDeclaration,
     getDocumentContentDeclaration
 ];
 
@@ -177,7 +173,8 @@ app.post('/api/analyze-conflict', async (req, res) => {
         }
 
         console.log(`[API] Received conflict analysis request for new requirement: ${new_requirement.substring(0, 30)}...`);
-        const result = await checkConflict({ new_requirement, retrieved_context });
+        // requirementAnalyzer handles 'check_conflict' action. It uses requirement_text.
+        const result = await requirementAnalyzer({ action: 'check_conflict', requirement_text: new_requirement, projectName: "default" });
         res.json(result);
     } catch (e: any) {
         console.error("Error in /api/analyze-conflict:", e);
@@ -476,7 +473,7 @@ When a tool returns a \`saved_path\` along with markdown content (like \`prd_mar
                         if (name === "retrieve_knowledge") {
                             toolResult = await retrieveKnowledge({ ...args, projectName, documentIds }, domainId);
                         } else if (name === "check_conflict") {
-                            toolResult = await checkConflict(args);
+                            toolResult = await requirementAnalyzer({ action: 'check_conflict', ...args, requirement_text: args.new_requirement }, domainId);
                         } else if (name === "withdraw_skill") {
                             toolResult = await withdrawSkill(args);
                         } else if (name === "update_knowledge") {
@@ -485,24 +482,12 @@ When a tool returns a \`saved_path\` along with markdown content (like \`prd_mar
                             toolResult = { content: loadKnowledge() };
                         } else if (name === "review_taxonomy_queue") {
                             toolResult = await reviewTaxonomyQueue(args, domainId);
-                        } else if (name === "simulate_impact") {
-                            toolResult = await simulateImpact({ ...args, projectName });
+                        } else if (name === "simulate_impact" || name === "trace_dependencies" || name === "explain_lineage") {
+                            toolResult = await dependencyImpactAnalyzer({ action: name, ...args, projectName });
                         } else if (name === "draft_prd") {
                             toolResult = await draftPrd(args);
-                        } else if (name === "compare_requirements") {
-                            toolResult = await compareRequirements(args);
-                        } else if (name === "trace_dependencies") {
-                            toolResult = await traceDependencies(args);
-                        } else if (name === "check_compliance") {
-                            toolResult = await checkCompliance({ ...args, domainId, projectName });
-                        } else if (name === "generate_tests") {
-                            toolResult = await generateTests({ ...args, projectName });
-                        } else if (name === "detect_gaps") {
-                            toolResult = await detectGaps({ ...args, projectName });
-                        } else if (name === "explain_lineage") {
-                            toolResult = await explainLineage({ ...args, projectName });
-                        } else if (name === "analyze_requirement") {
-                            toolResult = await analyzeRequirement({ ...args, projectName }, domainId);
+                        } else if (name === "compare_requirements" || name === "check_compliance" || name === "detect_gaps" || name === "analyze_requirement") {
+                            toolResult = await requirementAnalyzer({ action: name, ...args, projectName }, domainId);
                         } else if (name === "get_document_content") {
                             toolResult = await getDocumentContent(args.fileId);
                         } else {
@@ -514,11 +499,16 @@ When a tool returns a \`saved_path\` along with markdown content (like \`prd_mar
                         toolResult = { error: `Tool execution failed: ${e.message}` };
                     }
 
+                    let llmContextResult = toolResult;
+                    if (name === "draft_prd" && toolResult.prd_markdown) {
+                        llmContextResult = { status: "success", message: "PRD Generation Complete. The document has been presented to the user directly, do not rewrite the PRD yourself." };
+                    }
+
                     messages.push({
                         role: "tool",
                         tool_call_id: call.id,
                         name: name,
-                        content: JSON.stringify(toolResult)
+                        content: JSON.stringify(llmContextResult)
                     });
                 }
             }
@@ -581,7 +571,7 @@ When a tool returns a \`saved_path\` along with markdown content (like \`prd_mar
                         if (name === "retrieve_knowledge") {
                             toolResult = await retrieveKnowledge({ ...args, projectName, documentIds }, domainId);
                         } else if (name === "check_conflict") {
-                            toolResult = await checkConflict(args);
+                            toolResult = await requirementAnalyzer({ action: 'check_conflict', ...args, requirement_text: args.new_requirement }, domainId);
                         } else if (name === "withdraw_skill") {
                             toolResult = await withdrawSkill(args);
                         } else if (name === "update_knowledge") {
@@ -590,24 +580,12 @@ When a tool returns a \`saved_path\` along with markdown content (like \`prd_mar
                             toolResult = { content: loadKnowledge() };
                         } else if (name === "review_taxonomy_queue") {
                             toolResult = await reviewTaxonomyQueue(args, domainId);
-                        } else if (name === "simulate_impact") {
-                            toolResult = await simulateImpact({ ...args, projectName });
+                        } else if (name === "simulate_impact" || name === "trace_dependencies" || name === "explain_lineage") {
+                            toolResult = await dependencyImpactAnalyzer({ action: name, ...args, projectName });
                         } else if (name === "draft_prd") {
                             toolResult = await draftPrd(args);
-                        } else if (name === "compare_requirements") {
-                            toolResult = await compareRequirements(args);
-                        } else if (name === "trace_dependencies") {
-                            toolResult = await traceDependencies(args);
-                        } else if (name === "check_compliance") {
-                            toolResult = await checkCompliance({ ...args, domainId, projectName });
-                        } else if (name === "generate_tests") {
-                            toolResult = await generateTests({ ...args, projectName });
-                        } else if (name === "detect_gaps") {
-                            toolResult = await detectGaps({ ...args, projectName });
-                        } else if (name === "explain_lineage") {
-                            toolResult = await explainLineage({ ...args, projectName });
-                        } else if (name === "analyze_requirement") {
-                            toolResult = await analyzeRequirement({ ...args, projectName }, domainId, emitEvent);
+                        } else if (name === "compare_requirements" || name === "check_compliance" || name === "detect_gaps" || name === "analyze_requirement") {
+                            toolResult = await requirementAnalyzer({ action: name, ...args, projectName }, domainId);
 
                             // Phase 3: Persist the Architect Report to the database
                             if (toolResult && toolResult.verdict === "ANALYZED") {
@@ -632,10 +610,15 @@ When a tool returns a \`saved_path\` along with markdown content (like \`prd_mar
                         toolResult = { error: `Tool execution failed: ${e.message}` };
                     }
 
+                    let llmContextResult = typeof toolResult === "object" ? toolResult : { result: toolResult };
+                    if (name === "draft_prd" && toolResult.prd_markdown) {
+                        llmContextResult = { status: "success", message: "PRD Generation Complete. The document has been presented to the user directly, do not rewrite the PRD yourself." };
+                    }
+
                     functionResponses.push({
                         functionResponse: {
                             name: name,
-                            response: typeof toolResult === "object" ? toolResult : { result: toolResult }
+                            response: llmContextResult
                         }
                     });
                 }
@@ -762,12 +745,9 @@ ${text}
                             console.log(`[Ingestion Agent] Successfully repaired truncated JSON.`);
                         }
 
-                        if (fcall.name === 'get_taxonomy') {
-                            toolResult = await getTaxonomy({ domainId });
-                        } else if (fcall.name === 'propose_new_category') {
-                            toolResult = await proposeNewCategory({ ...args, domainId });
-                        } else if (fcall.name === 'write_subgraph') {
-                            toolResult = await writeSubgraph({ ...args, domainId, sourceDocument: source, status: req.body.status || 'EFFECTIVE', projectName, extractedBy: modelTag });
+                        if (fcall.name === 'get_taxonomy' || fcall.name === 'propose_new_category' || fcall.name === 'write_subgraph') {
+                            const action = fcall.name;
+                            toolResult = await knowledgeOrchestrator({ action, ...args, domainId, sourceDocument: source, status: req.body.status || 'EFFECTIVE', projectName, extractedBy: modelTag });
                         } else {
                             toolResult = { error: `Unknown tool for ingestion: ${fcall.name}` };
                         }
@@ -810,12 +790,9 @@ ${text}
                     let toolResult: any = {};
                     try {
                         const args = call.args as any;
-                        if (call.name === 'get_taxonomy') {
-                            toolResult = await getTaxonomy({ domainId });
-                        } else if (call.name === 'propose_new_category') {
-                            toolResult = await proposeNewCategory({ ...args, domainId });
-                        } else if (call.name === 'write_subgraph') {
-                            toolResult = await writeSubgraph({ ...args, domainId, sourceDocument: source, projectName, extractedBy: modelTag });
+                        if (call.name === 'get_taxonomy' || call.name === 'propose_new_category' || call.name === 'write_subgraph') {
+                            const action = call.name;
+                            toolResult = await knowledgeOrchestrator({ action, ...args, domainId, sourceDocument: source, status: req.body.status || 'EFFECTIVE', projectName, extractedBy: modelTag });
                         } else {
                             toolResult = { error: `Unknown tool for ingestion: ${call.name}` };
                         }

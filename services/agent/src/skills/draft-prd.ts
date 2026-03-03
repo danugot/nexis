@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI, FunctionDeclaration, SchemaType } from "@google/generative-ai";
 import OpenAI from "openai";
 import * as dotenv from "dotenv";
-import { simulateImpact } from "./simulate-impact";
+import { dependencyImpactAnalyzer } from "./dependency-impact-analyzer";
 import { saveReport } from "../utils/persistence";
 
 dotenv.config();
@@ -58,7 +58,7 @@ async function getProvider(): Promise<string> {
 export async function draftPrd(input: DraftPrdInput): Promise<DraftPrdResult> {
     let { proposal, impact_report } = input;
     if (!impact_report) {
-        impact_report = await simulateImpact({ proposed_feature: proposal, search_keywords: proposal });
+        impact_report = await dependencyImpactAnalyzer({ action: 'simulate_impact', proposed_feature: proposal, search_keywords: proposal });
     }
     const provider = await getProvider();
 

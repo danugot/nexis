@@ -9,15 +9,14 @@ dotenv.config(); // Fallback to default
 import { GoogleGenerativeAI, FunctionDeclaration, SchemaType } from '@google/generative-ai';
 import * as fs from 'fs';
 import * as readline from 'readline';
-import { checkConflict } from './skills/conflict-checker';
 import { withdrawSkill } from './skills/withdraw-skill';
 import { retrieveKnowledge } from './skills/retrieve-knowledge'; // [NEW]
-import { compareRequirementsDeclaration, compareRequirements } from './skills/compare-requirements';
-import { traceDependenciesDeclaration, traceDependencies } from './skills/trace-dependencies';
-import { checkComplianceDeclaration, checkCompliance } from './skills/check-compliance';
+
+
+
 import { generateTestsDeclaration, generateTests } from './skills/generate-tests';
-import { detectGapsDeclaration, detectGaps } from './skills/detect-gaps';
-import { explainLineageDeclaration, explainLineage } from './skills/explain-lineage';
+
+
 
 // --- Configuration ---
 const API_KEY = process.env.GEMINI_API_KEY;
@@ -40,6 +39,10 @@ function loadKnowledge(): string {
 }
 
 import { updateKnowledge, UpdateKnowledgeInput } from './skills/update-knowledge';
+import { knowledgeOrchestratorDeclaration, knowledgeOrchestrator } from "./skills/knowledge-orchestrator";
+import { requirementAnalyzerDeclaration, requirementAnalyzer } from "./skills/requirement-analyzer";
+import { dependencyImpactAnalyzerDeclaration, dependencyImpactAnalyzer } from "./skills/dependency-impact-analyzer";
+
 
 // --- Tool Definitions (Schema) ---
 
@@ -128,12 +131,10 @@ const tools: FunctionDeclaration[] = [
             properties: {},
         }
     },
-    compareRequirementsDeclaration,
-    traceDependenciesDeclaration,
-    checkComplianceDeclaration,
-    generateTestsDeclaration,
-    detectGapsDeclaration,
-    explainLineageDeclaration
+    requirementAnalyzerDeclaration,
+    dependencyImpactAnalyzerDeclaration,
+    knowledgeOrchestratorDeclaration,
+    generateTestsDeclaration
 ];
 
 // --- Main Agent Loop ---
@@ -218,26 +219,20 @@ async function main() {
 
                     if (name === "retrieve_knowledge") {
                         toolResult = await retrieveKnowledge(args);
-                    } else if (name === "check_conflict") {
-                        toolResult = await checkConflict(args);
                     } else if (name === "withdraw_skill") {
                         toolResult = await withdrawSkill(args);
                     } else if (name === "update_knowledge") {
                         toolResult = updateKnowledge(args);
                     } else if (name === "get_knowledge") {
                         toolResult = { content: loadKnowledge() };
-                    } else if (name === "compare_requirements") {
-                        toolResult = await compareRequirements(args);
-                    } else if (name === "trace_dependencies") {
-                        toolResult = await traceDependencies(args);
-                    } else if (name === "check_compliance") {
-                        toolResult = await checkCompliance(args);
+                    } else if (name === "compare_requirements" || name === "check_compliance" || name === "detect_gaps" || name === "analyze_requirement" || name === "check_conflict") {
+                        toolResult = await requirementAnalyzer({ action: name === 'check_conflict' ? 'check_conflict' : name, ...args, requirement_text: args.new_requirement || undefined });
+                    } else if (name === "trace_dependencies" || name === "simulate_impact" || name === "explain_lineage") {
+                        toolResult = await dependencyImpactAnalyzer({ action: name, ...args });
+                    } else if (name === "get_taxonomy" || name === "propose_new_category" || name === "write_subgraph") {
+                        toolResult = await knowledgeOrchestrator({ action: name, ...args });
                     } else if (name === "generate_tests") {
                         toolResult = await generateTests(args);
-                    } else if (name === "detect_gaps") {
-                        toolResult = await detectGaps(args);
-                    } else if (name === "explain_lineage") {
-                        toolResult = await explainLineage(args);
                     } else {
                         toolResult = { error: `Unknown tool: ${name}` };
                     }
