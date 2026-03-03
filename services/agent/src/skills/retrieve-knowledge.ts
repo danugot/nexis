@@ -5,12 +5,15 @@ export interface RetrieveKnowledgeInput {
     query: string;
     n_results?: number;
     projectName?: string;
+    documentIds?: string[];
+    status_filter?: string[]; // e.g. ["EFFECTIVE", "DRAFT"]
 }
 
 export interface KnowledgeItem {
     type: "vector" | "graph";
     content: string;
     source: string;
+    status?: string;
 }
 
 export interface RetrieveKnowledgeResult {
@@ -19,7 +22,7 @@ export interface RetrieveKnowledgeResult {
 }
 
 export async function retrieveKnowledge(input: RetrieveKnowledgeInput, domainId?: string): Promise<RetrieveKnowledgeResult> {
-    const { query, n_results = 5, projectName } = input;
+    const { query, n_results = 5, projectName, status_filter } = input;
 
     const RAG_API_URL = process.env.RAG_API_URL || "http://rag_api:8000";
 
@@ -31,7 +34,9 @@ export async function retrieveKnowledge(input: RetrieveKnowledgeInput, domainId?
                 query,
                 n_results,
                 domain_id: domainId,
-                project_name: projectName
+                project_name: projectName,
+                document_ids: input.documentIds,
+                status_filter
             })
         });
 

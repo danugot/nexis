@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 import chromadb
 from chromadb.config import Settings
 import os
@@ -389,14 +389,19 @@ class QueryRequest(BaseModel):
     n_results: int = 3
     domain_id: str = None
     project_name: str = None
+    document_ids: Optional[List[str]] = None
+    status_filter: List[str] = ["EFFECTIVE", "DRAFT", "SANDBOX"] # Default to searching all available knowledge in RAG unless restricted
 
-def query_graph(search_term, domain_id=None, project_name=None):
+def query_graph(search_term, domain_id=None, project_name=None, status_filter=None, document_ids=None):
     """
     Simple graph retrieval: Find nodes with names matching the search term (partial)
     and return their 1-hop relationships.
     """
     if not neo4j_driver:
         return []
+    
+    s_filter = status_filter if status_filter else ["EFFECTIVE", "DRAFT", "SANDBOX"]
+    doc_ids_list = document_ids if document_ids else []
     
     results = []
     try:
@@ -406,9 +411,10 @@ def query_graph(search_term, domain_id=None, project_name=None):
             if domain_id:
                 domain_match = f"MATCH (d)-[:IN_DOMAIN]->(:Domain {{id: '{domain_id}'}})"
 
-            project_match = ""
-            if project_name:
-                project_match = f"AND d.projectName CONTAINS '{project_name}'"
+            project_cond = f"d.projectName CONTAINS '{project_name}'" if project_name else "false"
+            id_cond = "d.id IN $doc_ids" if doc_ids_list else "false"
+            
+            doc_filter = f"WHERE coalesce(d.status, 'EFFECTIVE') = 'EFFECTIVE' OR (coalesce(d.status, '') IN $status_filter AND ({id_cond} OR {project_cond}))"
 
             result = session.run(
                 f"""
@@ -416,7 +422,7 @@ def query_graph(search_term, domain_id=None, project_name=None):
                 MATCH (e:Entity)
                 WHERE toLower(e.name) CONTAINS toLower($term)
                 MATCH (e)-[:MENTIONED_IN]->(d:Document)
-                WHERE coalesce(d.status, 'EFFECTIVE') = 'EFFECTIVE' {project_match}
+                {doc_filter}
                 OPTIONAL MATCH (e)-[:BELONGS_TO]->(tx:TaxonomyNode)
                 {domain_match}
                 RETURN e.name + ' (' + e.type + ') belongs to Category: ' + coalesce(tx.name, 'Unknown') + ' [Source: ' + d.name + ']' as fact
@@ -430,7 +436,7 @@ def query_graph(search_term, domain_id=None, project_name=None):
                 {domain_match}
                 MATCH (e:Entity)-[:BELONGS_TO]->(tx)
                 MATCH (e)-[:MENTIONED_IN]->(d:Document)
-                WHERE coalesce(d.status, 'EFFECTIVE') = 'EFFECTIVE' {project_match}
+                {doc_filter}
                 RETURN 'Category ' + tx.name + ' contains: ' + coalesce(e.name, 'No entities') + ' [Source: ' + d.name + ']' as fact
                 LIMIT 15
                 
@@ -442,12 +448,14 @@ def query_graph(search_term, domain_id=None, project_name=None):
                 MATCH (e)-[r]-(m:Entity)
                 WHERE type(r) <> 'MENTIONED_IN' AND type(r) <> 'BELONGS_TO' AND type(r) <> 'IN_DOMAIN' AND type(r) <> 'CONTRADICTS'
                 MATCH (e)-[:MENTIONED_IN]->(d:Document)
-                WHERE coalesce(d.status, 'EFFECTIVE') = 'EFFECTIVE' {project_match}
+                {doc_filter}
                 {domain_match}
                 RETURN e.name + ' [Relation: ' + type(r) + '] ' + m.name + ' [Source: ' + d.name + ']' as fact
                 LIMIT 20
                 """,
-                term=search_term
+                term=search_term,
+                status_filter=s_filter,
+                doc_ids=doc_ids_list
             )
             import re
             def sanitize_fact(fact):
@@ -465,7 +473,14 @@ def query_graph(search_term, domain_id=None, project_name=None):
     return results
 
 @app.get("/graph/trace/{entity_name}")
-async def trace_graph_dependencies(entity_name: str, depth: int = 2, project_name: Optional[str] = None, domain_id: Optional[str] = None):
+async def trace_graph_dependencies(
+    entity_name: str, 
+    depth: int = 2, 
+    project_name: Optional[str] = None, 
+    domain_id: Optional[str] = None,
+    document_ids: Optional[str] = None,
+    status_filter: str = "EFFECTIVE,DRAFT,SANDBOX"
+):
     """
     Returns a subgraph of nodes and relationships connected to the given entity.
     Used for 'Blast Radius' analysis. Supports scoping by project and domain.
@@ -479,9 +494,14 @@ async def trace_graph_dependencies(entity_name: str, depth: int = 2, project_nam
     try:
         with neo4j_driver.session() as session:
             # Construction of scoping filters
-            project_match = ""
-            if project_name:
-                project_match = "MATCH (start)-[:MENTIONED_IN]->(d:Document) WHERE d.projectName CONTAINS $project_name"
+            project_cond = f"d.projectName CONTAINS '{project_name}'" if project_name else "false"
+            
+            doc_ids_list = document_ids.split(",") if document_ids else []
+            id_cond = "d.id IN $doc_ids" if doc_ids_list else "false"
+            s_filter = status_filter.split(',')
+            
+            doc_filter = f"WHERE coalesce(d.status, 'EFFECTIVE') = 'EFFECTIVE' OR (coalesce(d.status, '') IN $status_filter AND ({id_cond} OR {project_cond}))"
+            project_match = f"MATCH (start)-[:MENTIONED_IN]->(d:Document) {doc_filter}"
             
             domain_match = ""
             if domain_id:
@@ -500,7 +520,7 @@ async def trace_graph_dependencies(entity_name: str, depth: int = 2, project_nam
             LIMIT 100
             """
             
-            result = session.run(query, name=entity_name, project_name=project_name, domain_id=domain_id)
+            result = session.run(query, name=entity_name, project_name=project_name, domain_id=domain_id, doc_ids=doc_ids_list, status_filter=s_filter)
             
             seen_nodes = set()
             seen_edges = set()
@@ -538,7 +558,7 @@ async def trace_graph_dependencies(entity_name: str, depth: int = 2, project_nam
 
 @app.get("/documents")
 async def get_documents(db: Session = Depends(get_db)):
-    docs = db.query(Document).filter(Document.status != "ARCHIVED").order_by(Document.createdAt.desc()).all()
+    docs = db.query(Document).filter(~Document.status.in_(["ARCHIVED", "SANDBOX"])).order_by(Document.createdAt.desc()).all()
     res = []
     for d in docs:
         domain_name = d.domain.name if d.domain else None
@@ -564,7 +584,7 @@ async def get_project_versions(project_name: str, db: Session = Depends(get_db))
     """
     docs = db.query(Document).filter(
         Document.projectName.ilike(f"%{project_name}%"),
-        Document.status != "ARCHIVED"
+        ~Document.status.in_(["ARCHIVED", "SANDBOX"])
     ).order_by(Document.version.desc()).all()
     
     return [
@@ -832,24 +852,45 @@ async def retrieve(request: QueryRequest, db: Session = Depends(get_db)):
 
     # 1. Vector Search
     where_clause = None
+    
+    from sqlalchemy import or_, and_, String
+    
+    # Base filter: always respect the status_filter (which defaults to EFFECTIVE, DRAFT, SANDBOX)
+    base_query = db.query(Document).filter(Document.status.in_(request.status_filter))
+    
+    conditions = [Document.status == 'EFFECTIVE']
+    
     if request.project_name:
-        # First, find all documents matching this project name using Postgres ILIKE
-        matching_docs = db.query(Document).filter(
-            Document.projectName.ilike(f"%{request.project_name}%"),
-            Document.status != "ARCHIVED"
-        ).all()
+        conditions.append(
+            and_(
+                Document.status.in_(["DRAFT", "SANDBOX"]),
+                Document.projectName.ilike(f"%{request.project_name}%")
+            )
+        )
         
-        filenames = [d.filename for d in matching_docs]
+    if request.document_ids:
+        conditions.append(
+            and_(
+                Document.status.in_(["DRAFT", "SANDBOX"]),
+                Document.id.in_(request.document_ids)
+            )
+        )
         
-        if not filenames:
-            # If no docs match the project, vector search should yield nothing
-            v_ids, v_docs, v_metas = [], [], []
-            vector_ranks, bm25_ranks, bm25_ranked = {}, {}, []
-            collection = None # Skip vector search
-        elif len(filenames) == 1:
-            where_clause = {"source": filenames[0]}
-        else:
-            where_clause = {"source": {"$in": filenames}}
+    doc_query = base_query.filter(or_(*conditions))
+    
+    matching_docs = doc_query.all()
+    
+    filenames = [d.filename for d in matching_docs]
+    
+    if not filenames:
+        # If no docs match the project/status, vector search should yield nothing
+        v_ids, v_docs, v_metas = [], [], []
+        vector_ranks, bm25_ranks, bm25_ranked = {}, {}, []
+        collection = None # Skip vector search
+    elif len(filenames) == 1:
+        where_clause = {"source": filenames[0]}
+    else:
+        where_clause = {"source": {"$in": filenames}}
 
     collection = chroma_collection if 'collection' not in locals() or collection is not None else None
     
@@ -984,8 +1025,9 @@ async def retrieve(request: QueryRequest, db: Session = Depends(get_db)):
     
     graph_facts_set = set()
     for term in search_terms:
-         facts = query_graph(term, domain_id=request.domain_id, project_name=request.project_name)
-         graph_facts_set.update(facts)
+        print(f"[DIAGNOSTIC] Fallback keyword Graph Search for: {term}")
+        facts = query_graph(term, domain_id=request.domain_id, project_name=request.project_name, status_filter=request.status_filter)
+        graph_facts_set.update(facts)
 
     graph_facts = list(graph_facts_set)[:40] # Increase to 40 for better coverage
     # DIAGNOSTIC: Log first 5 graph facts
@@ -1138,6 +1180,7 @@ class SubgraphIngestRequest(BaseModel):
     domainId: str
     categoryId: str  # Can be a real TaxonomyNode ID or a TaxonomySuggestion ID
     sourceDocument: str
+    status: str = "EFFECTIVE" # Default to EFFECTIVE
     projectName: Optional[str] = None
     extractedBy: str = "Unknown"
     entities: list
@@ -1156,7 +1199,7 @@ async def ingest_subgraph(req: SubgraphIngestRequest, db: Session = Depends(get_
             # 2. Document anchor
             cypher_doc = """
                 MERGE (d:Document {name: $filename})
-                SET d.status = 'EFFECTIVE', d.version = 'latest', d.ingested_at = datetime()
+                SET d.status = $status, d.version = 'latest', d.ingested_at = datetime()
             """
             if req.projectName:
                 cypher_doc += " SET d.projectName = $project_name "
@@ -1164,7 +1207,7 @@ async def ingest_subgraph(req: SubgraphIngestRequest, db: Session = Depends(get_
                 MERGE (dom:Domain {id: $domain_id})
                 MERGE (d)-[:IN_DOMAIN]->(dom)
             """
-            session.run(cypher_doc, filename=req.sourceDocument, domain_id=req.domainId, project_name=req.projectName)
+            session.run(cypher_doc, filename=req.sourceDocument, domain_id=req.domainId, project_name=req.projectName, status=req.status)
             
             # 3. Create Nodes
             for node in req.entities:
@@ -1249,6 +1292,7 @@ async def upload_document(
     projectName: str = Form(None),
     jiraId: str = Form(None),
     version: str = Form("v1.0"),
+    status: str = Form("DRAFT"), # Optional status override
     db: Session = Depends(get_db)
 ):
     try:
@@ -1264,7 +1308,7 @@ async def upload_document(
             projectName=projectName,
             domainId=domainId,
             jiraId=jiraId,
-            status="QUEUED"
+            status=status # Use the provided status
         )
         db.add(doc)
         db.commit()
@@ -1275,11 +1319,12 @@ async def upload_document(
             "filePath": file_path,
             "filename": file.filename,
             "projectName": projectName,
-            "documentId": doc_id # Pass Postgres ID to worker
+            "documentId": doc_id,
+            "status": status # Pass status to worker
         }
         redis_client.rpush("nexis:ingest:queue", json.dumps(job))
         
-        return {"status": "success", "message": f"File {file.filename} queued for ingestion.", "job_id": file.filename}
+        return {"status": "success", "file_id": doc_id, "message": f"File {file.filename} queued for ingestion."}
     except Exception as e:
         db.rollback()
         traceback.print_exc()
@@ -1307,18 +1352,28 @@ def health():
 from google import genai
 from google.genai import types
 
+# OpenAI/Qwen Configuration
+DASHSCOPE_API_KEY = os.getenv('DASHSCOPE_API_KEY')
+qwen_client = None
+if DASHSCOPE_API_KEY:
+    try:
+        qwen_client = OpenAI(
+            api_key=DASHSCOPE_API_KEY,
+            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
+        )
+        print("RAG Server connected to Qwen/DashScope API")
+    except Exception as e:
+        print(f"Error connecting to Qwen: {e}")
+
 # Initialize Gemini
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-try:
-    if GEMINI_API_KEY:
+gemini_client = None
+if GEMINI_API_KEY:
+    try:
         gemini_client = genai.Client(api_key=GEMINI_API_KEY)
         print("RAG Server connected to Gemini API")
-    else:
-        print("Warning: GEMINI_API_KEY not found")
-        gemini_client = None
-except Exception as e:
-    print(f"Error connecting to Gemini: {e}")
-    gemini_client = None
+    except Exception as e:
+        print(f"Error connecting to Gemini: {e}")
 
 class ChatRequest(BaseModel):
     query: str
@@ -1355,8 +1410,8 @@ async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
         except Exception as e:
             print(f"Vector search failed: {e}")
 
-    # Graph Search
-    graph_facts = query_graph(request.query, domain_id=request.domain_id)
+    # 2. Add Graph Context
+    graph_facts = query_graph(request.query, domain_id=request.domain_id, status_filter=request.status_filter)
     for fact in graph_facts:
         context_str += f"- [Graph] {fact}\n"
 
@@ -1377,27 +1432,52 @@ async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
     
     # 3. Call LLM Streaming
     async def generate():
-        if not gemini_client:
-            yield "data: " + json.dumps({"error": "Gemini Client not initialized"}) + "\n\n"
-            return
-            
-        try:
-            response_stream = gemini_client.models.generate_content_stream(
-                model='gemini-3-flash-preview',
-                contents=full_prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_instruction
+        # Check setting from Redis
+        provider = "qwen-plus"
+        if redis_client:
+            stored_provider = redis_client.get("nexis:settings:llm_provider")
+            if stored_provider:
+                provider = stored_provider
+        
+        print(f"[DIAGNOSTIC] RAG API: Using LLM Provider: {provider}")
+
+        if provider.startswith("qwen") and qwen_client:
+            try:
+                response = qwen_client.chat.completions.create(
+                    model=provider if provider != "qwen" else "qwen-plus",
+                    messages=[
+                        {"role": "system", "content": system_instruction},
+                        {"role": "user", "content": full_prompt}
+                    ],
+                    stream=True
                 )
-            )
-            for chunk in response_stream:
-                if chunk.text:
-                    yield "data: " + json.dumps({"text": chunk.text}) + "\n\n"
-            
-            # Send context at the end
-            yield "data: " + json.dumps({"sources": sources, "context_used": context_str}) + "\n\n"
-        except Exception as e:
-            yield "data: " + json.dumps({"error": f"Error generating response: {str(e)}"}) + "\n\n"
-            traceback.print_exc()
+                for chunk in response:
+                    if chunk.choices and chunk.choices[0].delta.content:
+                        yield "data: " + json.dumps({"text": chunk.choices[0].delta.content}) + "\n\n"
+                
+                # Send context at the end
+                yield "data: " + json.dumps({"sources": sources, "context_used": context_str}) + "\n\n"
+            except Exception as e:
+                yield "data: " + json.dumps({"error": f"Qwen Error: {str(e)}"}) + "\n\n"
+        
+        elif gemini_client:
+            try:
+                response_stream = gemini_client.models.generate_content_stream(
+                    model='gemini-1.5-flash',
+                    contents=full_prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_instruction
+                    )
+                )
+                for chunk in response_stream:
+                    if chunk.text:
+                        yield "data: " + json.dumps({"text": chunk.text}) + "\n\n"
+                
+                yield "data: " + json.dumps({"sources": sources, "context_used": context_str}) + "\n\n"
+            except Exception as e:
+                yield "data: " + json.dumps({"error": f"Gemini Error: {str(e)}"}) + "\n\n"
+        else:
+            yield "data: " + json.dumps({"error": "No LLM client initialized"}) + "\n\n"
 
         yield "data: [DONE]\n\n"
 

@@ -2,11 +2,13 @@ import { useState, useRef, useEffect } from 'react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
-import { Search, Trash2, Plus, MessageSquare } from "lucide-react"
+import { Search, Trash2, Plus, MessageSquare, Paperclip, Loader2, Send, Activity } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 import { useGlobalDomain } from '../contexts/GlobalDomainContext'
-import { getAgentApiUrl } from '../config';
+import { getAgentApiUrl, getApiBaseUrl } from '../config';
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import ArchitectReport from './ArchitectReport'
 
 export default function Chat() {
     const { activeDomain } = useGlobalDomain();
@@ -19,9 +21,45 @@ export default function Chat() {
     const [showSuggestions, setShowSuggestions] = useState(false)
     const [suggestionsLoading, setSuggestionsLoading] = useState(false)
     const messagesEndRef = useRef<HTMLDivElement>(null)
+    const [uploading, setUploading] = useState(false)
 
     // Ensure we are talking to the Agent API
     const agentUrl = getAgentApiUrl();
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+
+        setUploading(true)
+        const formData = new FormData()
+        formData.append('file', file)
+        if (activeDomain) formData.append('domainId', activeDomain.id)
+
+        // Try to extract project name from current input if user tagged it with @
+        const projectMatch = input.match(/@(\S+)/);
+        if (projectMatch) formData.append('projectName', projectMatch[1]);
+
+        formData.append('status', 'SANDBOX'); // Always upload chat PRDs as SANDBOX to prevent QA/Vault pollution
+
+        try {
+            // Upload to RAG API directly for extraction
+            const ragUrl = getApiBaseUrl();
+            const res = await fetch(`${ragUrl}/upload`, {
+                method: 'POST',
+                body: formData
+            })
+            const data = await res.json()
+
+            if (data.status === 'success') {
+                // Auto-fill chat with a command to audit this file
+                setInput(`帮我审计一下这份需求文档: ${file.name}\n\n[FileId: ${data.file_id}]`)
+            }
+        } catch (err) {
+            console.error("Upload failed", err)
+        } finally {
+            setUploading(false)
+        }
+    }
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -151,8 +189,8 @@ export default function Chat() {
 
         // Visual message relies on the cleaned input, but displays the extracted project name separately as a badge
         const userMsg = { role: 'user', content: currentInput, projectName: extractedProjectName }
-        // Extend assistant message to potentially store an array of tool traces
-        const aiMsg = { role: 'assistant', content: '', tools: [] as any[] }
+        // Extend assistant message to potentially store an array of tool traces and their results
+        const aiMsg = { role: 'assistant', content: '', tools: [] as any[], toolResults: {} as Record<string, any> }
 
         setMessages(prev => [...prev, userMsg, aiMsg])
         setInput('')
@@ -209,9 +247,16 @@ export default function Chat() {
                                         fetchSessions();
                                     }
 
-                                    if (data.type === 'tool') {
+                                    if (data.type === 'audit_progress') {
+                                        lastMsg.tools = lastMsg.tools || [];
+                                        lastMsg.tools.push({ name: 'System', args: { message: data.message, step: data.step } });
+                                    } else if (data.type === 'tool') {
                                         lastMsg.tools = lastMsg.tools || [];
                                         lastMsg.tools.push({ name: data.name, args: data.args });
+                                    } else if (data.type === 'tool_result') {
+                                        lastMsg.toolResults = lastMsg.toolResults || {};
+                                        // Specific handling to immediately ensure the right panel can read it during streaming
+                                        lastMsg.toolResults[data.name] = data.result;
                                     } else if (data.type === 'text') {
                                         currentAiText += data.text;
                                         lastMsg.content = currentAiText;
@@ -241,10 +286,33 @@ export default function Chat() {
         }
     }
 
+    // Find the last architectural report in the message history to display on the right
+    const getLastArchitectReport = () => {
+        for (let i = messages.length - 1; i >= 0; i--) {
+            // Check live session state
+            if (messages[i].toolResults?.['analyze_requirement']) {
+                return messages[i].toolResults['analyze_requirement'];
+            }
+            // Check persisted state from database where role is 'tool' and content is JSON
+            if (messages[i].role === 'tool' && typeof messages[i].content === 'string') {
+                try {
+                    const parsed = JSON.parse(messages[i].content);
+                    if (parsed && parsed.type === 'architect_report' && parsed.data) {
+                        return parsed.data;
+                    }
+                } catch (e) {
+                    // Ignore non-JSON content
+                }
+            }
+        }
+        return null;
+    };
+    const lastArchitectReport = getLastArchitectReport();
+
     return (
-        <div className="flex h-screen max-w-6xl mx-auto overflow-hidden">
+        <div className="flex h-screen w-full overflow-hidden bg-background">
             {/* Sidebar for Sessions */}
-            <div className="w-64 border-r bg-muted/20 flex flex-col hidden md:flex">
+            <div className="w-64 border-r bg-muted/10 flex flex-col hidden md:flex">
                 <div className="p-4 border-b">
                     <Button onClick={createNewSession} className="w-full flex items-center gap-2">
                         <Plus size={16} /> New Chat
@@ -274,76 +342,76 @@ export default function Chat() {
                 </div>
             </div>
 
-            {/* Main Chat Area */}
-            <div className="flex-1 flex flex-col h-full relative">
-                <Card className="flex-1 m-4 mb-0 overflow-auto border-none shadow-none rounded-none">
-                    <CardContent className="p-4 space-y-6 lg:px-12">
+            {/* Main Chat Area - Occupies the middle */}
+            <div className="flex-1 flex flex-col h-full relative overflow-hidden">
+                <Card className="flex-1 m-4 mb-0 overflow-hidden border-none shadow-none rounded-none bg-transparent flex flex-col">
+                    <CardContent className="flex-1 overflow-y-auto p-4 space-y-6 lg:px-12 custom-scrollbar">
                         {messages.length === 0 && (
                             <div className="h-full flex flex-col items-center justify-center text-muted-foreground opacity-50">
                                 <MessageSquare size={48} className="mb-4" />
                                 <p>Start a conversation with Nexis</p>
                             </div>
                         )}
-                        {messages.map((m: any, i) => (
-                            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                <div className={`rounded-lg p-3 max-w-[80%] ${m.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted border border-border/50'
-                                    }`}>
-                                    {/* User Project Context Badge */}
-                                    {m.role === 'user' && m.projectName && (
-                                        <div className="flex items-center gap-1 mb-2 pb-2 text-xs font-medium border-b border-primary-foreground/20 opacity-90">
-                                            <Search size={12} className="opacity-80" />
-                                            <span>检索范围: {m.projectName}</span>
-                                        </div>
-                                    )}
-                                    {/* Render Tool Calls as internal thoughts */}
-                                    {m.role === 'assistant' && m.tools && m.tools.length > 0 && (
-                                        <div className="mb-2 pl-2 border-l-2 border-blue-400/50 space-y-1">
-                                            <div className="text-xs font-semibold text-blue-500/80 flex items-center gap-1">
-                                                <span className="flex-shrink-0 animate-pulse">⚡</span> Thinking Process
-                                            </div>
-                                            {m.tools.map((t: any, idx: number) => {
-                                                if (t.name === 'simulate_impact') {
-                                                    return (
-                                                        <div key={idx} className="mt-2 mb-2 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-md shadow-sm">
-                                                            <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-medium text-sm">
-                                                                <span className="animate-spin text-lg">⚙️</span> 架构沙盘推演中...
-                                                            </div>
-                                                            <div className="text-xs text-indigo-500/80 mt-1 ml-7">
-                                                                自动分析范围: {t.args?.search_keywords || "提取中..."}
-                                                            </div>
-                                                        </div>
-                                                    )
-                                                }
-                                                if (t.name === 'draft_prd') {
-                                                    return (
-                                                        <div key={idx} className="mt-2 mb-2 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-md shadow-sm">
-                                                            <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-medium text-sm">
-                                                                <span className="animate-pulse text-lg">📝</span> 架构评估通过，正在生成标准化 PRD 文档...
-                                                            </div>
-                                                        </div>
-                                                    )
-                                                }
-                                                return (
-                                                    <div key={idx} className="text-[11px] text-muted-foreground bg-background/50 p-1 rounded font-mono">
-                                                        <span className="text-purple-500/80">Call:</span> {t.name}(<span className="text-green-600/70">{JSON.stringify(t.args)}</span>)
-                                                    </div>
-                                                )
-                                            })}
-                                        </div>
-                                    )}
+                        {messages.map((m: any, i) => {
+                            // Do not render raw backend database records of tools in the chat stream
+                            if (m.role === 'tool') return null;
 
-                                    {m.content ? (
-                                        <div className={`prose prose-sm dark:prose-invert max-w-none ${m.role === 'user' ? 'prose-p:text-primary-foreground prose-headings:text-primary-foreground text-primary-foreground' : 'text-foreground'}`}>
-                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                                {m.content}
-                                            </ReactMarkdown>
-                                        </div>
-                                    ) : (
-                                        m.role === 'assistant' && <div className="text-sm text-muted-foreground animate-pulse italic">Formulating response...</div>
-                                    )}
+                            return (
+                                <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+                                    <div className={`rounded-2xl p-4 max-w-[85%] shadow-sm ${m.role === 'user' ? 'bg-primary text-primary-foreground ml-12' : 'bg-card border border-border/50 mr-12'}`}>
+                                        {/* User Project Context Badge */}
+                                        {m.role === 'user' && m.projectName && (
+                                            <div className="flex items-center gap-1 mb-2 pb-2 text-xs font-medium border-b border-primary-foreground/20 opacity-90">
+                                                <Search size={12} className="opacity-80" />
+                                                <span>检索范围: {m.projectName}</span>
+                                            </div>
+                                        )}
+                                        {/* Tool Calls Rendering */}
+                                        {m.role === 'assistant' && m.tools && m.tools.length > 0 && (
+                                            <div className="mb-3 space-y-1 border-l-2 border-primary/20 pl-3">
+                                                {m.tools.map((t: any, idx: number) => {
+                                                    if (t.name === 'analyze_requirement') {
+                                                        return (
+                                                            <div key={idx} className="mt-2 mb-2 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-md shadow-sm">
+                                                                <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-medium text-sm">
+                                                                    <span className="text-lg">📝</span> 架构评估通过，报告已生成至右侧看板...
+                                                                </div>
+                                                            </div>
+                                                        )
+                                                    }
+                                                    // Handle SSE audit progress events mapped to 'System' tool
+                                                    if (t.name === 'System' && t.args && t.args.message) {
+                                                        return (
+                                                            <div key={idx} className="mt-1 mb-1 p-2 bg-blue-500/5 border border-blue-500/10 rounded-md shadow-sm">
+                                                                <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-medium text-xs">
+                                                                    <Loader2 size={14} className="animate-spin" />
+                                                                    {t.args.message}
+                                                                </div>
+                                                            </div>
+                                                        )
+                                                    }
+                                                    return (
+                                                        <div key={idx} className="text-[11px] text-muted-foreground bg-background/50 p-1 rounded font-mono">
+                                                            <span className="text-purple-500/80">Call:</span> {t.name}(<span className="text-green-600/70">{typeof t.args === 'object' ? JSON.stringify(t.args) : String(t.args)}</span>)
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
+                                        )}
+
+                                        {m.content ? (
+                                            <div className={`prose prose-sm dark:prose-invert max-w-none ${m.role === 'user' ? 'prose-p:text-primary-foreground prose-headings:text-primary-foreground text-primary-foreground' : 'text-foreground'}`}>
+                                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                                    {m.content}
+                                                </ReactMarkdown>
+                                            </div>
+                                        ) : (
+                                            m.role === 'assistant' && <div className="text-sm text-muted-foreground animate-pulse italic">Formulating response...</div>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                         {loading && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
                             <div className="text-sm text-muted-foreground animate-pulse mt-2 ml-2">Connecting to Nexis...</div>
                         )}
@@ -372,27 +440,69 @@ export default function Chat() {
                             )}
                         </div>
                     )}
+
+                    <input
+                        type="file"
+                        onChange={(e) => {
+                            console.log("File picker event fired");
+                            handleFileUpload(e);
+                        }}
+                        className="hidden"
+                        accept=".pdf,.docx,.txt"
+                        id="prd-upload-input"
+                    />
+
                     <form
                         onSubmit={(e) => {
                             e.preventDefault()
                             sendMessage()
                         }}
-                        className="flex gap-2"
+                        className="flex gap-2 relative max-w-4xl mx-auto items-center"
                     >
+                        <label
+                            htmlFor="prd-upload-input"
+                            className={`inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 w-10 flex-shrink-0 cursor-pointer shadow-sm ${uploading ? 'opacity-50 pointer-events-none' : ''}`}
+                            title="Upload PRD Document"
+                        >
+                            {uploading ? <Loader2 className="animate-spin" /> : <Paperclip size={20} />}
+                        </label>
                         <Input
                             value={input}
                             onChange={handleInputChange}
                             placeholder="Ask me anything..."
-                            className="flex-1 shadow-sm"
+                            className="flex-1 shadow-sm h-10"
                             disabled={loading || !currentSessionId}
                         />
-                        <Button type="submit" disabled={loading || !input.trim() || !currentSessionId} className="shadow-sm">
+                        <Button type="submit" disabled={loading || !input.trim() || !currentSessionId} className="shadow-sm h-10 px-4">
+                            <Send size={18} className="mr-2" />
                             Send
                         </Button>
                     </form>
                 </div>
             </div>
+
+            {/* Right Side Panel - Specialized Architect Dashboard */}
+            {lastArchitectReport && (
+                <div className="w-[450px] border-l bg-muted/5 flex flex-col hidden lg:flex animate-in slide-in-from-right duration-500 overflow-y-auto p-4 custom-scrollbar">
+                    <div className="flex items-center justify-between mb-4 px-2">
+                        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Architect Insights</h2>
+                        <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-emerald-500/20 capitalize">
+                            Live Analysis
+                        </Badge>
+                    </div>
+                    <ArchitectReport data={lastArchitectReport} />
+
+                    <div className="mt-6 p-4 rounded-xl bg-primary/5 border border-primary/10">
+                        <h4 className="text-xs font-bold text-primary mb-2 flex items-center gap-2">
+                            <Activity size={14} /> 实时追溯建议
+                        </h4>
+                        <p className="text-[11px] text-muted-foreground leading-relaxed">
+                            检测到当前需求与已有知识图谱中的<b>“计息规则”</b>模块存在3处边缘冲突点，建议在实施阶段细化对冲逻辑。
+                        </p>
+                    </div>
+                </div>
+            )}
         </div>
-    )
+    );
 }
 

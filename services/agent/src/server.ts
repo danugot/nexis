@@ -28,6 +28,8 @@ import { checkComplianceDeclaration, checkCompliance } from './skills/check-comp
 import { generateTestsDeclaration, generateTests } from './skills/generate-tests';
 import { detectGapsDeclaration, detectGaps } from './skills/detect-gaps';
 import { explainLineageDeclaration, explainLineage } from './skills/explain-lineage';
+import { analyzeRequirementDeclaration, analyzeRequirement } from './skills/analyze-requirement';
+import { getDocumentContentDeclaration, getDocumentContent } from './skills/get-document-content';
 import { prisma } from './db';
 
 // --- Configuration ---
@@ -45,7 +47,7 @@ const openai = new OpenAI({
 
 const KNOWLEDGE_PATH = path.join(process.cwd(), 'knowledge', 'history_prd.md');
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6380');
+const redis = new Redis(process.env.REDIS_URL || 'redis://redis:6379');
 
 function loadKnowledge(): string {
     if (fs.existsSync(KNOWLEDGE_PATH)) {
@@ -154,7 +156,9 @@ const tools: FunctionDeclaration[] = [
     checkComplianceDeclaration,
     generateTestsDeclaration,
     detectGapsDeclaration,
-    explainLineageDeclaration
+    explainLineageDeclaration,
+    analyzeRequirementDeclaration,
+    getDocumentContentDeclaration
 ];
 
 // --- Express Server ---
@@ -298,10 +302,14 @@ app.post('/chat', async (req, res) => {
     // Update session title on first message
     if (dbMessages.length === 0) {
         // Simple heuristic for title
-        await prisma.session.update({
-            where: { id: sessionId },
-            data: { title: query.substring(0, 30) }
-        });
+        try {
+            await prisma.session.update({
+                where: { id: sessionId },
+                data: { title: query.substring(0, 30) }
+            });
+        } catch (e) {
+            console.warn(`Could not update session title for ${sessionId}:`, e);
+        }
     }
 
     // Save User Message to DB immediately
@@ -312,6 +320,21 @@ app.post('/chat', async (req, res) => {
             content: query
         }
     });
+
+    // Extract Document IDs from chat history for SANDBOX context isolation
+    const documentIds: string[] = [];
+    const extractFileIds = (text: string) => {
+        const matches = [...text.matchAll(/\[FileId:\s*([^\]]+)\]/g)];
+        for (const match of matches) {
+            if (match[1] && !documentIds.includes(match[1])) {
+                documentIds.push(match[1]);
+            }
+        }
+    };
+    extractFileIds(query);
+    for (const msg of dbMessages) {
+        extractFileIds(msg.content);
+    }
 
     // Setup SSE
     res.setHeader('Content-Type', 'text/event-stream');
@@ -350,10 +373,11 @@ app.post('/chat', async (req, res) => {
 **Information Separation Rule**: When answering, prioritize facts retrieved from the Knowledge Base (Nexis PRD) and label them '【基于知识库】'. ONLY include your own general industry knowledge (labeled '【通用行业知识补充】') IF the retrieved facts are insufficient or if the user asks for a broader explanation. If the PRD knowledge alone answers the user's question completely, DO NOT add unnecessary general knowledge.
 
 **Entity / Project Name Anti-Hallucination Rule (CRITICAL)**: 
-1. If the user asks about a specific project, system, or document (e.g., "Project A"), you MUST deeply check the 'source' filename in the retrieved context. 
-2. DO NOT assume a file is about "Project A" if its name does not explicitly contain "Project A". (e.g., if the file is named "Project B.docx", it is ONLY about Project B, NOT Project A).
-3. If the retrieved sources do not match the requested project name, you MUST reply: "【基于知识库】：未在知识库中找到关于特定项目或文档《X》的专属内容，但我为您找到了《Y》的相关功能..."
-4. NEVER say "Project X (即 Project Y)" or "Project X is Project Y". They are DIFFERENT THINGS unless explicitly and factually stated in the text.
+1. If the user explicitly mentions a project name or document title (e.g., "Project A") or uses the @ mention, you MUST deeply check the 'source' filename in the retrieved context. 
+2. DO NOT assume a file is about "Project A" if its name does not explicitly contain "Project A".
+3. ONLY IF the user's intent is tied to a specific project name and NO retrieved sources match that name, you MUST reply: "【基于知识库】：未在知识库中找到关于特定项目《X》的专属内容，但为您找到了以下相关功能点..."
+4. IF THE USER IS ASKING ABOUT A DOCUMENT THEY JUST UPLOADED OR A GENERAL PROCESS (like "出票登记流程"), AND YOU FOUND RELEVANT CONTENT, JUST ANSWER DIRECTLY without any "not found" disclaimers. Use the content from the retrieved sources (including SANDBOX ones) to answer.
+5. NEVER say "Project X (即 Project Y)" or "Project X is Project Y". They are DIFFERENT THINGS unless explicitly and factually stated in the text.
 
 **Semantic Retrieval Rule (CRITICAL)**:
 When formulating the \`query\` argument for \`retrieve_knowledge\`, DO NOT over-abstract. If the user's prompt contains specific, highly-contextual nouns or features (e.g. '导流路径', '审批流', '回帖路径'), you MUST include those EXACT terms in your query string. Searching for generic terms like "新增功能" will fail to retrieve highly-specific vector chunks.
@@ -405,7 +429,8 @@ NEVER attempt to write or draft a PRD directly in the chat response. You MUST AL
                         model: modelTag,
                         messages: messages,
                         tools: openaiTools,
-                        tool_choice: "auto"
+                        tool_choice: "auto",
+                        max_tokens: 4096
                     });
                 } catch (completionError: any) {
                     console.error("OpenAI/Qwen API Rejection Error:", completionError.message, JSON.stringify(completionError, null, 2));
@@ -423,7 +448,21 @@ NEVER attempt to write or draft a PRD directly in the chat response. You MUST AL
                 for (const call of msg.tool_calls) {
                     const fcall = (call as any).function;
                     const name = fcall.name;
-                    const args = JSON.parse(fcall.arguments || "{}");
+                    let args: any = {};
+                    try {
+                        args = JSON.parse(fcall.arguments || "{}");
+                    } catch (parseError: any) {
+                        console.error(`[CRITICAL] Failed to parse tool arguments for ${name}:`, fcall.arguments);
+                        // Fallback: If it's truncated, try to close it if it's a simple string, 
+                        // but better to just report error to the model
+                        const errorMsg = `Tool call arguments for '${name}' were malformed or truncated. Please try again with a more concise summary.`;
+                        messages.push({
+                            role: "tool",
+                            tool_call_id: call.id,
+                            content: JSON.stringify({ error: errorMsg })
+                        });
+                        continue;
+                    }
 
                     emitEvent({ type: 'tool', name, args });
                     executedTools.push({ name, args });
@@ -431,7 +470,7 @@ NEVER attempt to write or draft a PRD directly in the chat response. You MUST AL
                     let toolResult: any;
                     try {
                         if (name === "retrieve_knowledge") {
-                            toolResult = await retrieveKnowledge({ ...args, projectName }, domainId);
+                            toolResult = await retrieveKnowledge({ ...args, projectName, documentIds }, domainId);
                         } else if (name === "check_conflict") {
                             toolResult = await checkConflict(args);
                         } else if (name === "withdraw_skill") {
@@ -458,9 +497,14 @@ NEVER attempt to write or draft a PRD directly in the chat response. You MUST AL
                             toolResult = await detectGaps({ ...args, projectName });
                         } else if (name === "explain_lineage") {
                             toolResult = await explainLineage({ ...args, projectName });
+                        } else if (name === "analyze_requirement") {
+                            toolResult = await analyzeRequirement({ ...args, projectName }, domainId);
+                        } else if (name === "get_document_content") {
+                            toolResult = await getDocumentContent(args.fileId);
                         } else {
                             toolResult = { error: `Unknown tool: ${name}` };
                         }
+                        emitEvent({ type: 'tool_result', name, result: toolResult });
                     } catch (e: any) {
                         console.error("Tool execution error:", e);
                         toolResult = { error: `Tool execution failed: ${e.message}` };
@@ -531,7 +575,7 @@ NEVER attempt to write or draft a PRD directly in the chat response. You MUST AL
 
                     try {
                         if (name === "retrieve_knowledge") {
-                            toolResult = await retrieveKnowledge({ ...args, projectName }, domainId);
+                            toolResult = await retrieveKnowledge({ ...args, projectName, documentIds }, domainId);
                         } else if (name === "check_conflict") {
                             toolResult = await checkConflict(args);
                         } else if (name === "withdraw_skill") {
@@ -558,9 +602,27 @@ NEVER attempt to write or draft a PRD directly in the chat response. You MUST AL
                             toolResult = await detectGaps({ ...args, projectName });
                         } else if (name === "explain_lineage") {
                             toolResult = await explainLineage({ ...args, projectName });
+                        } else if (name === "analyze_requirement") {
+                            toolResult = await analyzeRequirement({ ...args, projectName }, domainId, emitEvent);
+
+                            // Phase 3: Persist the Architect Report to the database
+                            if (toolResult && toolResult.verdict === "ANALYZED") {
+                                console.log(`[Server] Persisting Architect Report for session ${sessionId}`);
+                                await prisma.message.create({
+                                    data: {
+                                        sessionId: sessionId,
+                                        role: 'tool',
+                                        content: JSON.stringify({ type: 'architect_report', data: toolResult }),
+                                        createdAt: new Date()
+                                    }
+                                });
+                            }
+                        } else if (name === "get_document_content") {
+                            toolResult = await getDocumentContent(args.fileId);
                         } else {
                             toolResult = { error: `Unknown tool: ${name}` };
                         }
+                        emitEvent({ type: 'tool_result', name, result: toolResult });
                     } catch (e: any) {
                         console.error("Tool execution error:", e);
                         toolResult = { error: `Tool execution failed: ${e.message}` };
@@ -655,7 +717,8 @@ ${text}
                     model: modelTag,
                     messages: messages,
                     tools: openaiTools,
-                    tool_choice: "auto"
+                    tool_choice: "auto",
+                    max_tokens: 8192
                 });
 
                 const msg = completion.choices[0].message;
@@ -671,18 +734,42 @@ ${text}
                     console.log(`[Ingestion Agent - Qwen] Calling Tool: ${fcall.name}`);
                     let toolResult: any = {};
                     try {
-                        const args = JSON.parse(fcall.arguments || "{}");
+                        let argString = fcall.arguments || "{}";
+                        let args: any = {};
+
+                        try {
+                            args = JSON.parse(argString);
+                        } catch (initialParseError) {
+                            console.warn(`[Ingestion Agent] Initial JSON parse failed. Attempting to repair truncated JSON.`);
+                            // Aggressively try to close truncated JSON arrays/objects
+                            try {
+                                args = JSON.parse(argString + ']}');
+                            } catch (e2) {
+                                try {
+                                    args = JSON.parse(argString + '}]}');
+                                } catch (e3) {
+                                    try {
+                                        args = JSON.parse(argString + '}');
+                                    } catch (e4) {
+                                        throw initialParseError; // Give up, throw original error
+                                    }
+                                }
+                            }
+                            console.log(`[Ingestion Agent] Successfully repaired truncated JSON.`);
+                        }
+
                         if (fcall.name === 'get_taxonomy') {
                             toolResult = await getTaxonomy({ domainId });
                         } else if (fcall.name === 'propose_new_category') {
                             toolResult = await proposeNewCategory({ ...args, domainId });
                         } else if (fcall.name === 'write_subgraph') {
-                            toolResult = await writeSubgraph({ ...args, domainId, sourceDocument: source, projectName, extractedBy: modelTag });
+                            toolResult = await writeSubgraph({ ...args, domainId, sourceDocument: source, status: req.body.status || 'EFFECTIVE', projectName, extractedBy: modelTag });
                         } else {
                             toolResult = { error: `Unknown tool for ingestion: ${fcall.name}` };
                         }
-                    } catch (e: any) {
-                        toolResult = { error: e.message };
+                    } catch (parseError: any) {
+                        console.error(`[Ingestion Agent] Tool argument parse error:`, parseError);
+                        toolResult = { error: `Invalid JSON in tool arguments: ${parseError.message}. Please output fewer entities/relationships per tool call to fit within limits.` };
                     }
 
                     messages.push({
@@ -753,6 +840,6 @@ ${text}
     }
 });
 
-app.listen(PORT, () => {
-    console.log(`Agent API Server listening at http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Agent API Server listening at http://0.0.0.0:${PORT}`);
 });
