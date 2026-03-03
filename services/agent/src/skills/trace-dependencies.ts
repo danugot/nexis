@@ -7,6 +7,9 @@ dotenv.config();
 export interface TraceDependenciesInput {
     entity_name: string;
     depth?: number;
+    projectName?: string;
+    domainId?: string;
+    status_filter?: string[];
 }
 
 export interface TraceReport {
@@ -49,7 +52,7 @@ const openai = new OpenAI({
 
 const RAG_API_URL = process.env.RAG_API_URL || "http://rag_api:8000";
 
-async function queryRAG(query: string, projectName?: string): Promise<string> {
+async function queryRAG(query: string, projectName?: string, status_filter?: string[]): Promise<string> {
     try {
         const response = await fetch(`${RAG_API_URL}/retrieve`, {
             method: "POST",
@@ -57,7 +60,8 @@ async function queryRAG(query: string, projectName?: string): Promise<string> {
             body: JSON.stringify({
                 query: query,
                 n_results: 10,
-                project_name: projectName
+                project_name: projectName,
+                status_filter: status_filter || ["EFFECTIVE"]
             })
         });
 
@@ -108,7 +112,7 @@ export async function traceDependencies(input: TraceDependenciesInput): Promise<
         const subgraph = await response.json();
 
         // 2. Get textual dependencies from Vector
-        const vectorContext = await queryRAG(`Dependencies, relations, and impact of ${entity_name}`, projectName);
+        const vectorContext = await queryRAG(`Dependencies, relations, and impact of ${entity_name}`, projectName, input.status_filter);
 
         if ((!subgraph.nodes || subgraph.nodes.length === 0) && !vectorContext) {
             return {
@@ -139,6 +143,7 @@ export async function traceDependencies(input: TraceDependenciesInput): Promise<
         2. Identify "Hidden Dependencies": Things mentioned in text but not yet modeled in the graph.
         3. Provide an Impact Analysis: If this entity's logic were to change, which other parts of the system are most at risk?
         4. Synthesize the findings into a clear, professional summary.
+        5. IMPORTANT: You MUST output all generated text, summaries, and descriptions entirely in Simplified Chinese (简体中文).
 
         Return ONLY valid JSON:
         {

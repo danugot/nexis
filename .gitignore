@@ -9,8 +9,15 @@ wheels/
 # Virtual environments
 .venv
 node_modules/
-worker.log
+*.log
 .env
 __pycache__/
 *.pyc
 venv/
+
+# Data and System junk
+raw_docs/
+processed_docs/
+.DS_Store
+.idea/
+.vscode/

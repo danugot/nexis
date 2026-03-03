@@ -24,28 +24,59 @@ Nexis is more than just a RAG (Retrieval-Augmented Generation) tool; it’s a "B
 
 ```mermaid
 graph TD
-    User((User)) <--> UI[Web UI - React/Vite]
+    User((User & Documents)) <--> UI[Web UI - React/Vite]
     UI <--> Agent[Agent Brain - Node.js/ReAct]
     
-    subgraph "Intelligence Layer"
-        Agent <--> Skills[Skills Executor]
-        Skills --> S1[retrieve_knowledge]
-        Skills --> S2[simulate_impact]
-        Skills --> S3[draft_prd]
+    subgraph "🤖 Intelligence Layer (Agent Skills)"
+        Agent <--> Skills[Skill Dispatcher]
+        
+        subgraph "1. Architect Audit Core"
+            S1_1[analyze-requirement]
+            S1_2[check-compliance]
+            S1_3[simulate-impact]
+            S1_4[trace-dependencies]
+            S1_5[detect-gaps]
+        end
+        
+        subgraph "2. Generative Action"
+            S2_1[draft-prd]
+            S2_2[generate-tests]
+            S2_3[withdraw-skill]
+        end
+
+        subgraph "3. Retrieval & Analysis"
+            S3_1[retrieve-knowledge]
+            S3_2[compare-requirements]
+            S3_3[conflict-checker]
+            S3_4[explain-lineage]
+            S3_5[update-knowledge]
+        end
+
+        subgraph "4. Ingestion & Graph Building"
+            S4_1[ingest-write-subgraph]
+            S4_2[get-document-content]
+            S4_3[ingest-get-taxonomy]
+            S4_4[ingest-propose-category]
+            S4_5[review-taxonomy-queue]
+        end
+
+        Skills --> S1_1
+        Skills --> S2_1
+        Skills --> S3_1
+        Skills --> S4_1
     end
     
-    subgraph "Knowledge Infra (FastAPI)"
-        S1 & S2 <--> RAG_API[RAG Service]
-        RAG_API <--> Vector[ChromaDB - Vectors]
-        RAG_API <--> Graph[Neo4j - Knowledge Graph]
-        RAG_API <--> DB[PostgreSQL - Meta/History]
+    subgraph "🗄️ Knowledge Infra (FastAPI & DBs)"
+        RAG_API[Python RAG Service]
+        RAG_API <--> Vector[(ChromaDB - Vectors)]
+        RAG_API <--> Graph[(Neo4j - Knowledge Graph)]
+        RAG_API <--> DB[(PostgreSQL - History/Meta)]
     end
     
-    subgraph "Ingestion Pipeline"
-        Docs[PRD/Docs] --> Worker[Ingestion Worker]
-        Worker --> Vector
-        Worker --> Graph
-    end
+    %% Connections between Skills and Infra
+    S1_1 & S1_2 & S1_3 & S1_4 & S1_5 -.- RAG_API
+    S3_1 & S3_2 & S3_3 & S3_4 & S3_5 -.- RAG_API
+    S4_1 & S4_2 & S4_3 & S4_4 & S4_5 -.- RAG_API
 ```
 
 ---

@@ -8,6 +8,7 @@ export interface CheckComplianceInput {
     requirement_text: string;
     domainId?: string;
     projectName?: string;
+    status_filter?: string[];
 }
 
 export interface ComplianceReport {
@@ -53,7 +54,7 @@ const openai = new OpenAI({
 
 const RAG_API_URL = process.env.RAG_API_URL || "http://rag_api:8000";
 
-async function queryRAG(query: string, domainId?: string, projectName?: string): Promise<string> {
+async function queryRAG(query: string, domainId?: string, projectName?: string, status_filter?: string[]): Promise<string> {
     try {
         const response = await fetch(`${RAG_API_URL}/retrieve`, {
             method: "POST",
@@ -62,7 +63,8 @@ async function queryRAG(query: string, domainId?: string, projectName?: string):
                 query: query,
                 n_results: 10,
                 domain_id: domainId,
-                project_name: projectName
+                project_name: projectName,
+                status_filter: status_filter || ["EFFECTIVE"]
             })
         });
 
@@ -112,11 +114,11 @@ async function getProvider(): Promise<string> {
 }
 
 export async function checkCompliance(input: CheckComplianceInput): Promise<ComplianceReport> {
-    const { requirement_text, domainId, projectName } = input;
+    const { requirement_text, domainId, projectName, status_filter } = input;
     const provider = await getProvider();
 
     // 1. Retrieve potential global rules (Vector)
-    const vectorContext = await queryRAG(`Global business rules security policy compliance standards ${requirement_text}`, domainId, projectName);
+    const vectorContext = await queryRAG(`Global business rules security policy compliance standards ${requirement_text}`, domainId, projectName, status_filter);
 
     // 2. Retrieve structural dependencies (Graph)
     const graphContext = await getGraphContext(requirement_text, projectName);
@@ -141,6 +143,7 @@ export async function checkCompliance(input: CheckComplianceInput): Promise<Comp
     3. For each violation, explain WHY it is a violation and cite the SOURCE.
     4. Provide recommendations for alignment.
     5. Give a Confidence Score (0.0 to 1.0) based on context availability.
+    6. IMPORTANT: You MUST output all generated text, explanations, and recommendations entirely in Simplified Chinese (简体中文).
 
     Return ONLY valid JSON:
     {

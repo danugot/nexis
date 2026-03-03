@@ -70,6 +70,8 @@ services:
     volumes:
       - ./raw_docs:/app/raw_docs
       - ./processed_docs:/app/processed_docs
+      - ./python_services:/app/python_services
+      - ./services/rag_api:/app/services/rag_api
 
   worker:
     build: 
@@ -98,6 +100,8 @@ services:
     volumes:
       - ./raw_docs:/app/raw_docs
       - ./processed_docs:/app/processed_docs
+      - ./python_services:/app/python_services
+      - ./services/worker:/app/services/worker
 
   agent_api:
     build: ./services/agent
@@ -116,6 +120,9 @@ services:
       - postgres
       - rag_api
       - redis
+    volumes:
+      - ./services/agent:/app
+      - /app/node_modules
 
   web-ui:
     build: ./web-ui

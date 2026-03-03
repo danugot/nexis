@@ -64,7 +64,7 @@ export const writeSubgraphDeclaration: FunctionDeclaration = {
 };
 
 export async function writeSubgraph(args: any) {
-    const { domainId, categoryId, sourceDocument, projectName, extractedBy, entities, relationships } = args;
+    const { domainId, categoryId, sourceDocument, status, projectName, extractedBy, entities, relationships } = args;
 
     // We will build a 'dumb' generic endpoint in rag_api to accept this exact payload
     const PYTHON_API = process.env.RAG_API_URL || "http://localhost:8001";
@@ -77,6 +77,7 @@ export async function writeSubgraph(args: any) {
                 domainId,
                 categoryId,
                 sourceDocument,
+                status,
                 projectName,
                 extractedBy,
                 entities: entities || [],

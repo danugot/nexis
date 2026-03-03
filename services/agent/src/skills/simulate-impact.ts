@@ -8,6 +8,7 @@ export interface SimulateImpactInput {
     proposed_feature: string;
     search_keywords: string;
     projectName?: string;
+    status_filter?: string[];
 }
 
 export interface ImpactReport {
@@ -51,7 +52,7 @@ const openai = new OpenAI({
 
 const RAG_API_URL = process.env.RAG_API_URL || "http://rag_api:8000";
 
-async function queryRAG(query: string, projectName?: string): Promise<string> {
+async function queryRAG(query: string, projectName?: string, status_filter?: string[]): Promise<string> {
     try {
         const response = await fetch(`${RAG_API_URL}/retrieve`, {
             method: "POST",
@@ -59,7 +60,8 @@ async function queryRAG(query: string, projectName?: string): Promise<string> {
             body: JSON.stringify({
                 query: query,
                 n_results: 15,
-                project_name: projectName
+                project_name: projectName,
+                status_filter: status_filter || ["EFFECTIVE"]
             })
         });
 
@@ -113,7 +115,7 @@ export async function simulateImpact(input: SimulateImpactInput): Promise<Impact
     const provider = await getProvider();
 
     // 1. Textual impact (Vector)
-    const vectorContext = await queryRAG(search_keywords, projectName);
+    const vectorContext = await queryRAG(search_keywords, projectName, input.status_filter);
     // 2. Structural impact (Graph)
     const graphContext = await getGraphContext(search_keywords, projectName);
 
@@ -137,6 +139,7 @@ export async function simulateImpact(input: SimulateImpactInput): Promise<Impact
     3. Identify "Broken Rules": Existing logic that would need updating.
     4. Identify "Missing Prerequisites": Fields, APIs, or data that the graph shows are missing.
     5. Evaluate overall feasibility and provide a Confidence Score (0.0 to 1.0).
+    6. IMPORTANT: You MUST output all generated text, suggestions, and rule names entirely in Simplified Chinese (简体中文).
 
     Return ONLY valid JSON:
     {

@@ -7,6 +7,7 @@ dotenv.config();
 export interface DetectGapsInput {
     target_area: string;
     projectName?: string;
+    status_filter?: string[];
 }
 
 export interface LogicGap {
@@ -51,7 +52,7 @@ const openai = new OpenAI({
 
 const RAG_API_URL = process.env.RAG_API_URL || "http://rag_api:8000";
 
-async function queryRAG(query: string, projectName?: string): Promise<string> {
+async function queryRAG(query: string, projectName?: string, status_filter?: string[]): Promise<string> {
     try {
         const response = await fetch(`${RAG_API_URL}/retrieve`, {
             method: "POST",
@@ -59,7 +60,8 @@ async function queryRAG(query: string, projectName?: string): Promise<string> {
             body: JSON.stringify({
                 query: query,
                 n_results: 15,
-                project_name: projectName
+                project_name: projectName,
+                status_filter: status_filter || ["EFFECTIVE"]
             })
         });
 
@@ -111,7 +113,7 @@ export async function detectGaps(input: DetectGapsInput): Promise<GapReport> {
     const provider = await getProvider();
 
     // 1. Gather deep context
-    const vectorContext = await queryRAG(`Detailed business logic, constraints, and error handling for ${target_area}`, projectName);
+    const vectorContext = await queryRAG(`Detailed business logic, constraints, and error handling for ${target_area}`, projectName, input.status_filter);
     const graphContext = await getGraphContext(target_area, projectName);
 
     const prompt = `
@@ -132,6 +134,7 @@ export async function detectGaps(input: DetectGapsInput): Promise<GapReport> {
     2. Look for "Missing Error Handling": What happens if the process fails or limits are reached?
     3. Look for "Dead Ends": Entities in the graph with no outbound relationships or rules.
     4. Identify "State Gaps": Are all possible status transitions accounted for (e.g., from 'Pending' to 'Finished', is there a 'Failed' state?)?
+    5. IMPORTANT: You MUST output all generated text, summaries, and descriptions entirely in Simplified Chinese (简体中文).
 
     Return ONLY valid JSON:
     {
