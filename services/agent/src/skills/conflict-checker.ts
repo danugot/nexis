@@ -36,7 +36,7 @@ async function queryRAG(query: string): Promise<string> {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 query: query,
-                n_results: 3
+                n_results: 10
             })
         });
 

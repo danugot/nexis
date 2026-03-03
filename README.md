@@ -38,8 +38,10 @@ flowchart TB
     subgraph AgentLayer ["🧠 Orchestration Layer (Agent Brain)"]
         direction TB
         Brain["🤖 Core Engine (Node.js/ReAct)"]:::agent
+        Router{"🧭 Semantic / Intent Router"}:::agent
         Dispatcher{"⚙️ Skill Dispatcher"}:::agent
-        Brain <--> Dispatcher
+        Brain <--> Router
+        Router <--> Dispatcher
     end
 
     subgraph SkillsLayer ["🛠️ Intelligence Layer (Skills Ecosystem)"]

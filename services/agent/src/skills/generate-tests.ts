@@ -181,6 +181,7 @@ export async function generateTests(input: GenerateTestsInput): Promise<TestRepo
 
         return {
             ...report,
+            test_markdown: markdownCases,
             saved_path: savedPath
         } as any; // Cast because TestReport interface doesn't have saved_path yet
 

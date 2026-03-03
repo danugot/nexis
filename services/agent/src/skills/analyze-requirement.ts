@@ -97,6 +97,7 @@ export async function analyzeRequirement(input: AnalyzeRequirementInput, domainI
 
         return {
             ...masterReport,
+            report_markdown: markdownContent,
             saved_path: savedPath
         };
 

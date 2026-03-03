@@ -392,7 +392,7 @@ If the user uses "what if" scenarios (e.g., "如果支持...", "可以实现吗"
 2. **Dissonance Detection**: If the user's proposal explicitly violates a "Terminal Sequential Rule" or state flow in the retrieved PRD, you MUST start your response by pointing out the factual conflict: "【发现冲突】: 您提出的方案与现有流程不一致...". Do NOT blindly agree to a hypothetical change if the facts say otherwise.
 3. AFTER acknowledging any conflicts, if they asked to evaluate feasibility or draft a PRD, you MUST call \`simulate_impact\` and then \`draft_prd\`. You are acting as an active Business Architect, but anchored in truth.
 NEVER attempt to write or draft a PRD directly in the chat response. You MUST ALWAYS use the \`draft_prd\` tool to generate it.
-When a tool returns a \`saved_path\` for any generated report (like PRD, Architect Report, or Test Cases), you MUST inform the user exactly where it is saved using: "【文件已存档】：\`$PATH\`".`;
+When a tool returns a \`saved_path\` along with markdown content (like \`prd_markdown\`, \`test_markdown\`, or \`report_markdown\`), you MUST output the FULL markdown content directly in your response so the user can read it, and then append "【文件已存档】：\`$PATH\`" at the very end.`;
 
         let finalText = "";
         const executedTools = [];

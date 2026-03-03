@@ -140,7 +140,9 @@ export async function checkCompliance(input: CheckComplianceInput): Promise<Comp
     === Analysis Instructions ===
     1. Identify violations of document-based rules found in the vector context.
     2. Identify conflicts with structural relationships in the graph context.
-    3. **CRITICAL: Detect Dependency Inversion**. If the user proposes doing Step B before Step A, but the context shows Step A is a prerequisite or MUST happen first (e.g., "提示承兑签收后才能提示收票"), you MUST flag this as a critical violation and name the rule "时序逻辑违规 (Sequential Violation)".
+    3. **CRITICAL: Detect Dependency Inversion & Silent Prerequisites**. 
+       - If the user proposes doing Step B before Step A, but the context shows Step A is a prerequisite or MUST happen first (e.g., "提示承兑签收后才能提示收票"), flag this as a critical violation ("时序逻辑违规").
+       - BEWARE of "Silent Prerequisites": If a document configures an "Automatic action X", it DOES NOT waive the fundamental legal prerequisites for X unless explicitly stated. Always enforce the core sequential flow found in the context.
     4. For each violation, explain WHY it is a violation and cite the SOURCE.
     5. Provide recommendations for alignment.
     6. Give a Confidence Score (0.0 to 1.0) based on context availability.

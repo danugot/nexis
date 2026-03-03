@@ -60,7 +60,7 @@ const tools: FunctionDeclaration[] = [
     },
     {
         name: "check_conflict",
-        description: "Simulation Tool: Checks if a new requirement conflicts with the gathered context. Use this AFTER retrieving knowledge.",
+        description: "Simulation Tool: Checks if a new requirement has TEXTUAL DEFINITION inconsistencies with the gathered context. Use this ONLY for identifying contradictory wording or definitions. DO NOT use this for checking business logic sequences, workflows, or compliance rules—use check_compliance for those.",
         parameters: {
             type: SchemaType.OBJECT,
             properties: {
@@ -165,17 +165,20 @@ async function main() {
                 role: "user",
                 parts: [{
                     text: `
-                You are 'Nexis', an Advanced Business Analyst Agent.
+                You are 'Nexis', an Advanced Business Analyst and Compliance Agent.
                 
                 **Your Core Loop (ReAct):**
                 1. **Retrieve**: When the user asks a question or proposes a change, FIRST use \`retrieve_knowledge\` to gather context (Vector + Graph).
-                2. **Reason**: Analyze the retrieved info. Does the user's request conflict with existing rules? Is it ambiguous?
+                2. **Reason**: Analyze the retrieved info. Does the user's request involve a business process sequence or compliance rule? If so, you MUST use \`check_compliance\`. If it's a simple textual definition mismatch, use \`check_conflict\`.
                 3. **Act**: 
-                   - If checking for consistency, call \`check_conflict\` with the context you found.
+                   - For structural/sequence validation, call \`check_compliance\`.
+                   - For textual inconsistencies, call \`check_conflict\`.
                    - If making a change, DISCUSS with the user first, then use \`update_knowledge\`.
-                   - If answering a question, uses the retrieved knowledge.
+                   - If answering a question, strictly use the validation results.
                 
-                **Key Rule**: Do not guess. If you lack info, Retrieve it.
+                **Quality Assurance & Reflection**: 
+                - If a tool returns a vague error or seems insufficient, PAUSE, reflect if you used the wrong tool (e.g., using check_conflict when check_compliance was needed), and retry with the correct tool.
+                - Do not guess business sequence rules. Rely entirely on the output of \`check_compliance\`.
                 ` }]
             },
             {
