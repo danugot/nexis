@@ -18,6 +18,7 @@ venv/
 # Data and System junk
 raw_docs/
 processed_docs/
+_docs/
 .DS_Store
 .idea/
 .vscode/
