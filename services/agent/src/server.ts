@@ -401,9 +401,17 @@ DO NOT provide conversational filler. DO NOT summarize. JUST EXECUTE THE TOOL CA
             const pastMessages: any[] = [];
             if (dbMessages && dbMessages.length > 0) {
                 for (const msg of dbMessages) {
+                    let contentToPush = msg.content;
+                    if (isInformationalQuery && msg.role === 'assistant') {
+                        // Purge toxic context from previous turns to prevent hallucinating Mega-Tools
+                        contentToPush = contentToPush.replace(/下一步行动建议[\s\S]*/g, '').trim();
+                        contentToPush = contentToPush.replace(/dependency_impact_analyzer/g, '[Redacted Tool]');
+                        contentToPush = contentToPush.replace(/requirement_analyzer/g, '[Redacted Tool]');
+                        contentToPush = contentToPush.replace(/draft_prd/g, '[Redacted Tool]');
+                    }
                     pastMessages.push({
                         role: msg.role === 'assistant' ? 'assistant' : 'user',
-                        content: msg.content
+                        content: contentToPush
                     });
                 }
             }
@@ -411,7 +419,7 @@ DO NOT provide conversational filler. DO NOT summarize. JUST EXECUTE THE TOOL CA
             // Build Contextual System Prompt
             // By putting Auto-Context here instead of in the user's latest message,
             // we preserve the conversational continuity for short queries like "continue"
-            const contextualSystemPrompt = `${systemPrompt}
+            let contextualSystemPrompt = `${systemPrompt}
             
 ---
 [Pre-Retrieved System Auto-Context For Current Query]
@@ -419,6 +427,10 @@ ${autoContext}
 
 [Project Scope: ${projectName || 'None'}]
 ---`;
+
+            if (isInformationalQuery && !forceToolTrigger) {
+                contextualSystemPrompt += `\n\n**ANTI-HALLUCINATION DIRECTIVE**: You are answering a simple informational query. DO NOT offer, suggest, or attempt to use tools like \`requirement_analyzer\`, \`dependency_impact_analyzer\`, or \`draft_prd\` in your response footer, even if you did so previously in this chat history. DO NOT output "下一步行动建议" or act as an architect. Just provide the direct answer.`;
+            }
 
             const messages: any[] = [
                 { role: "system", content: contextualSystemPrompt },
@@ -543,9 +555,17 @@ ${autoContext}
             // Format db history to Gemini history format
             if (dbMessages && dbMessages.length > 0) {
                 for (const msg of dbMessages) {
+                    let contentToPush = msg.content;
+                    if (isInformationalQuery && msg.role === 'assistant') {
+                        // Purge toxic context from previous turns
+                        contentToPush = contentToPush.replace(/下一步行动建议[\s\S]*/g, '').trim();
+                        contentToPush = contentToPush.replace(/dependency_impact_analyzer/g, '[Redacted Tool]');
+                        contentToPush = contentToPush.replace(/requirement_analyzer/g, '[Redacted Tool]');
+                        contentToPush = contentToPush.replace(/draft_prd/g, '[Redacted Tool]');
+                    }
                     formattedHistory.push({
                         role: msg.role === 'assistant' ? 'model' : 'user',
-                        parts: [{ text: msg.content }]
+                        parts: [{ text: contentToPush }]
                     });
                 }
             }
