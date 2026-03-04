@@ -6,6 +6,7 @@ dotenv.config();
 
 export interface RequirementAnalyzerInput {
     action: 'analyze' | 'compare' | 'check_conflict' | 'detect_gaps' | 'check_compliance';
+    intent_text?: string;
     documentId?: string;
     projectName?: string;
     target_area?: string;          // For gaps/conflicts
@@ -18,24 +19,20 @@ export interface RequirementAnalyzerInput {
 
 export const requirementAnalyzerDeclaration: FunctionDeclaration = {
     name: "requirement_analyzer",
-    description: "MASTER_REQUIREMENT_TOOL: The SINGLE tool for ALL requirement-related tasks. Use this for general architectural analysis, comparing document versions, detecting logic gaps, checking business compliance, and finding textual conflicts.",
+    description: "Architectural Analysis Tool. Use this when the user explicitly asks to analyze architecture, detect gaps, compare documents, or check business compliance.",
     parameters: {
         type: SchemaType.OBJECT,
         properties: {
             action: {
                 type: SchemaType.STRING,
-                description: "The analysis mode: 'analyze' (full architectural audit), 'compare' (diff two docs), 'check_conflict' (textual inconsistencies), 'detect_gaps' (missing logic), 'check_compliance' (business/security rules)."
+                description: "The analysis mode: 'analyze', 'compare', 'check_conflict', 'detect_gaps', 'check_compliance'."
             },
-            documentId: { type: SchemaType.STRING, description: "ID of the primary PRD (used in 'analyze')." },
-            projectName: { type: SchemaType.STRING, description: "The project context." },
-            target_area: { type: SchemaType.STRING, description: "Specific feature/area (used in 'detect_gaps')." },
-            requirement_text: { type: SchemaType.STRING, description: "The specific text to check (used in 'check_compliance' or 'check_conflict')." },
-            versionA: { type: SchemaType.STRING, description: "Baseline version for 'compare'." },
-            versionB: { type: SchemaType.STRING, description: "Target version for 'compare'." },
-            docIdA: { type: SchemaType.STRING, description: "Baseline doc ID for 'compare'." },
-            docIdB: { type: SchemaType.STRING, description: "Target doc ID for 'compare'." }
+            intent_text: {
+                type: SchemaType.STRING,
+                description: "The natural language description of what the user wants to analyze, compare, or the feature they are proposing."
+            }
         },
-        required: ["action", "projectName"]
+        required: ["action", "intent_text"]
     }
 };
 
@@ -150,17 +147,16 @@ async function callLLM(prompt: string, provider: string): Promise<any> {
 // --- Action Implementations ---
 
 async function runAnalyze(input: RequirementAnalyzerInput, provider: string) {
-    // In a real implementation, this might call the other actions internally
-    // For simplicity of this super-tool, we do a unified master prompt
+    const text = input.intent_text || input.requirement_text || "";
     const doc = await getDocumentDetails({ id: input.documentId, project: input.projectName });
     const graph = await getGraphContext(input.projectName || "Unknown", input.projectName);
-    const vector = await queryRAG(`Architecture rules compliance gaps ${input.projectName}`, input.projectName, 20);
+    const vector = await queryRAG(`Architecture rules compliance gaps ${input.projectName} ${text}`, input.projectName, 20);
 
     const prompt = `
-    You are 'Nexis', a Master Business Architect. Perform a comprehensive Architectural Audit on this document.
+    You are 'Nexis', a Master Business Architect. Perform a comprehensive Architectural Audit on this topic/requirement: ${text}
     Project: ${input.projectName}
     
-    Document Content: ${doc.content ? doc.content.substring(0, 5000) : "No content provided."}
+    Document Content: ${doc.content ? doc.content.substring(0, 5000) : "No full document content provided."}
     Knowledge Graph Context: ${graph}
     Vector Rules Context: ${vector}
     
@@ -194,7 +190,7 @@ async function runCompare(input: RequirementAnalyzerInput, provider: string) {
 }
 
 async function runCompliance(input: RequirementAnalyzerInput, provider: string) {
-    const text = input.requirement_text || input.target_area || "";
+    const text = input.intent_text || input.requirement_text || input.target_area || "";
     const vector = await queryRAG(`Rules compliance ${text}`, input.projectName);
     const graph = await getGraphContext(text, input.projectName);
 
@@ -210,12 +206,12 @@ async function runCompliance(input: RequirementAnalyzerInput, provider: string) 
 }
 
 async function runGaps(input: RequirementAnalyzerInput, provider: string) {
-    const text = input.target_area || input.requirement_text || "";
+    const text = input.intent_text || input.target_area || input.requirement_text || "";
     const vector = await queryRAG(`Details constraints error limits ${text}`, input.projectName);
     const graph = await getGraphContext(text, input.projectName);
 
     const prompt = `
-    Identify missing logic, edge cases, and empty states.
+    Identify missing logic, edge cases, and empty states based on this requirement:
     Target Area: ${text}
     Vector Rules: ${vector}
     Graph Context: ${graph}
@@ -226,7 +222,7 @@ async function runGaps(input: RequirementAnalyzerInput, provider: string) {
 }
 
 async function runConflict(input: RequirementAnalyzerInput, provider: string) {
-    const text = input.requirement_text || "";
+    const text = input.intent_text || input.requirement_text || "";
     const vector = await queryRAG(text, input.projectName);
 
     const prompt = `

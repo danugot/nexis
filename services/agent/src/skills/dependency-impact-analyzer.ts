@@ -6,12 +6,8 @@ dotenv.config();
 
 export interface DependencyImpactInput {
     action: 'trace_dependencies' | 'simulate_impact' | 'explain_lineage';
-    entity_name?: string;      // For trace and lineage
-    proposed_feature?: string; // For simulate
-    search_keywords?: string;  // For simulate
-    depth?: number;            // For trace
+    intent_text: string;       // Unified natural language input from the user
     projectName?: string;
-    status_filter?: string[];
 }
 
 export const dependencyImpactAnalyzerDeclaration: FunctionDeclaration = {
@@ -24,13 +20,13 @@ export const dependencyImpactAnalyzerDeclaration: FunctionDeclaration = {
                 type: SchemaType.STRING,
                 description: "The core analysis mode: 'trace_dependencies' (blast radius), 'simulate_impact' (sandbox feasibility), or 'explain_lineage' (historical roots)."
             },
-            entity_name: { type: SchemaType.STRING, description: "The term/entity to trace or find lineage for." },
-            proposed_feature: { type: SchemaType.STRING, description: "The core new feature for impact simulation." },
-            search_keywords: { type: SchemaType.STRING, description: "Specific nouns/verbs from the proposal to search the database." },
-            depth: { type: SchemaType.NUMBER, description: "Graph traversal depth for trace (default 2)." },
+            intent_text: {
+                type: SchemaType.STRING,
+                description: "The name of the entity, the proposed feature, or the subject you want to analyze or trace."
+            },
             projectName: { type: SchemaType.STRING, description: "Optional project scope." }
         },
-        required: ["action"]
+        required: ["action", "intent_text"]
     }
 };
 
@@ -117,14 +113,14 @@ async function callLLM(prompt: string, provider: string): Promise<any> {
 // --- Action Implementations ---
 
 async function runTrace(input: DependencyImpactInput, provider: string) {
-    if (!input.entity_name) throw new Error("entity_name required for trace_dependencies");
+    if (!input.intent_text) throw new Error("intent_text required for trace_dependencies");
 
-    const subgraph = await getGraphContext(input.entity_name, input.depth || 2, input.projectName);
-    const vector = await queryRAG(`Dependencies, relations, and impact of ${input.entity_name}`, input.projectName, input.status_filter);
+    const subgraph = await getGraphContext(input.intent_text, 2, input.projectName);
+    const vector = await queryRAG(`Dependencies, relations, and impact of ${input.intent_text}`, input.projectName, ["EFFECTIVE"]);
 
     const prompt = `
     You are 'Nexis', a Senior System Architect. Analyze "Blast Radius".
-    Target Entity: ${input.entity_name}
+    Target Entity: ${input.intent_text}
     Graph: ${JSON.stringify(subgraph)}
     Textual Context: ${vector}
     
@@ -135,14 +131,14 @@ async function runTrace(input: DependencyImpactInput, provider: string) {
 }
 
 async function runSimulate(input: DependencyImpactInput, provider: string) {
-    if (!input.proposed_feature || !input.search_keywords) throw new Error("proposed_feature and search_keywords required for simulate_impact");
+    if (!input.intent_text) throw new Error("intent_text required for simulate_impact");
 
-    const vector = await queryRAG(input.search_keywords, input.projectName, input.status_filter);
-    const subgraph = await getGraphContext(input.search_keywords, 2, input.projectName);
+    const vector = await queryRAG(input.intent_text, input.projectName, ["EFFECTIVE"]);
+    const subgraph = await getGraphContext(input.intent_text, 2, input.projectName);
 
     const prompt = `
     Run "Feasibility Sandbox Simulation" on new feature.
-    Feature: ${input.proposed_feature}
+    Feature: ${input.intent_text}
     Vector Constraints: ${vector}
     Graph Dependencies: ${JSON.stringify(subgraph)}
     
@@ -153,14 +149,14 @@ async function runSimulate(input: DependencyImpactInput, provider: string) {
 }
 
 async function runLineage(input: DependencyImpactInput, provider: string) {
-    if (!input.entity_name) throw new Error("entity_name required for explain_lineage");
+    if (!input.intent_text) throw new Error("intent_text required for explain_lineage");
 
-    const subgraph = await getGraphContext(input.entity_name, 4, input.projectName);
-    const vector = await queryRAG(`${input.entity_name} 的来源、背景、规则、依据、Regulation, Origins`, input.projectName);
+    const subgraph = await getGraphContext(input.intent_text, 4, input.projectName);
+    const vector = await queryRAG(`${input.intent_text} 的来源、背景、规则、依据、Regulation, Origins`, input.projectName);
 
     const prompt = `
     Trace Lineage back to origin point.
-    Target Entity: ${input.entity_name}
+    Target Entity: ${input.intent_text}
     Graph Context: ${JSON.stringify(subgraph)}
     Textual Evidence: ${vector}
     

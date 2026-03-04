@@ -237,33 +237,35 @@ export default function Chat() {
                             try {
                                 const data = JSON.parse(dataStr);
 
+                                // Perform accumulation OUTSIDE of the React setter to avoid StrictMode double-fire mutations
+                                if (data.type === 'text') {
+                                    currentAiText += data.text;
+                                } else if (data.type === 'error') {
+                                    currentAiText += `\n\nError: ${data.error}`;
+                                } else if (data.type === 'done') {
+                                    fetchSessions();
+                                }
+
                                 setMessages(prev => {
                                     const newMessages = [...prev] as any[];
-                                    const lastMsg = newMessages[newMessages.length - 1];
+                                    const lastIndex = newMessages.length - 1;
 
-                                    if (data.type === 'done') {
-                                        // Once the server has finished writing the response to the DB,
-                                        // Refresh the session list in the background so the title might update
-                                        fetchSessions();
-                                    }
+                                    // Deep copy the last message to avoid mutating the previous state directly
+                                    const lastMsg = { ...newMessages[lastIndex] };
+                                    lastMsg.tools = lastMsg.tools ? [...lastMsg.tools] : [];
+                                    lastMsg.toolResults = lastMsg.toolResults ? { ...lastMsg.toolResults } : {};
 
                                     if (data.type === 'audit_progress') {
-                                        lastMsg.tools = lastMsg.tools || [];
                                         lastMsg.tools.push({ name: 'System', args: { message: data.message, step: data.step } });
                                     } else if (data.type === 'tool') {
-                                        lastMsg.tools = lastMsg.tools || [];
                                         lastMsg.tools.push({ name: data.name, args: data.args });
                                     } else if (data.type === 'tool_result') {
-                                        lastMsg.toolResults = lastMsg.toolResults || {};
-                                        // Specific handling to immediately ensure the right panel can read it during streaming
                                         lastMsg.toolResults[data.name] = data.result;
-                                    } else if (data.type === 'text') {
-                                        currentAiText += data.text;
-                                        lastMsg.content = currentAiText;
-                                    } else if (data.type === 'error') {
-                                        currentAiText += `\n\nError: ${data.error}`;
+                                    } else if (data.type === 'text' || data.type === 'error') {
                                         lastMsg.content = currentAiText;
                                     }
+
+                                    newMessages[lastIndex] = lastMsg;
                                     return newMessages;
                                 });
                             } catch (e) {

@@ -60,7 +60,7 @@ function loadKnowledge(): string {
 }
 
 // --- Tool Definitions (Schema) ---
-const tools: FunctionDeclaration[] = [
+const chatTools: FunctionDeclaration[] = [
     {
         name: "retrieve_knowledge",
         description: "Searches the Knowledge Base (Hybrid Vector + Graph) for relevant facts, rules, and history. ALWAYS call this first when handling a user request involving domain rules.",
@@ -75,86 +75,13 @@ const tools: FunctionDeclaration[] = [
             required: ["query"]
         }
     },
-    {
-        name: "check_conflict",
-        description: "Simulation Tool: Checks if a new requirement conflicts with the gathered context. Use this AFTER retrieving knowledge.",
-        parameters: {
-            type: SchemaType.OBJECT,
-            properties: {
-                new_requirement: {
-                    type: SchemaType.STRING,
-                    description: "The user's proposed requirement."
-                },
-                retrieved_context: {
-                    type: SchemaType.STRING,
-                    description: "The context you found via retrieve_knowledge."
-                }
-            },
-            required: ["new_requirement", "retrieved_context"]
-        }
-    },
-    {
-        name: "withdraw_skill",
-        description: "Validates if a user can withdraw a specific amount based on their level.",
-        parameters: {
-            type: SchemaType.OBJECT,
-            properties: {
-                user_level: {
-                    type: SchemaType.NUMBER,
-                    description: "The user's numeric level (e.g., 2)."
-                },
-                amount: {
-                    type: SchemaType.NUMBER,
-                    description: "The amount to withdraw."
-                }
-            },
-            required: ["user_level", "amount"]
-        }
-    },
-    {
-        name: "update_knowledge",
-        description: "Updates the knowledge file by replacing a specific line/section. Use this ONLY when the user explicitly confirms a change.",
-        parameters: {
-            type: SchemaType.OBJECT,
-            properties: {
-                target_section: {
-                    type: SchemaType.STRING,
-                    description: "The section header related to the change (e.g., 'Withdrawal Rules')."
-                },
-                old_content: {
-                    type: SchemaType.STRING,
-                    description: "The specific line to be replaced."
-                },
-                new_content: {
-                    type: SchemaType.STRING,
-                    description: "The new line to insert."
-                },
-                rationale: {
-                    type: SchemaType.STRING,
-                    description: "A brief reason for the change."
-                }
-            },
-            required: ["target_section", "old_content", "new_content", "rationale"]
-        }
-    },
-    {
-        name: "get_knowledge",
-        description: "Reads the raw content of the current PRD file (history_prd.md). Useful for line-level edits.",
-        parameters: {
-            type: SchemaType.OBJECT,
-            properties: {},
-        }
-    },
-    // --- Ingestion Agent Tools ---
-    knowledgeOrchestratorDeclaration, // Replaces getTaxonomy, proposeNewCategory, writeSubgraph
-    // --- Admin Chat Tools ---
-    reviewTaxonomyQueueDeclaration,
-    // --- Copilot Pipeline Tools ---
-    requirementAnalyzerDeclaration, // Replaces compareRequirements, checkCompliance, detectGaps, checkConflict, analyzeRequirement
-    dependencyImpactAnalyzerDeclaration, // Replaces traceDependencies, simulateImpact, explainLineage
-    draftPrdDeclaration,
-    generateTestsDeclaration,
-    getDocumentContentDeclaration
+    requirementAnalyzerDeclaration,
+    dependencyImpactAnalyzerDeclaration,
+    draftPrdDeclaration
+];
+
+const ingestTools: FunctionDeclaration[] = [
+    knowledgeOrchestratorDeclaration
 ];
 
 // --- Express Server ---
@@ -339,9 +266,82 @@ app.post('/chat', async (req, res) => {
     res.setHeader('Connection', 'keep-alive');
     res.flushHeaders();
 
+    const executedTools = [];
+
     const emitEvent = (data: any) => {
         res.write(`data: ${JSON.stringify(data)}\n\n`);
     };
+
+    // --- Smart Intent Engine (Coreference & Tool Dispatch) ---
+    let rewrittenQuery = query;
+    let forceToolTrigger = false;
+    let forcedToolName: string | null = null;
+    let forcedToolIntent: string | null = null;
+
+    try {
+        emitEvent({ type: 'audit_progress', message: '分析上下文意图与指代...', step: 1 });
+        const recentHistory = dbMessages.slice(-4).map(m => `${m.role.toUpperCase()}: ${m.content}`).join("\n");
+        const intentPrompt = `
+You are 'Nexis Intent Engine', a coreference resolution and tool dispatch router.
+
+Recent Conversation History:
+${recentHistory}
+
+Latest User Query: "${query}"
+
+TASK 1 (Coreference): Rewrite the User Query to be completely self-contained for a semantic search engine. If they say "继续" (continue), "为什么" (why), or use pronouns, add the specific context from the history.
+TASK 2 (Tool Dispatch): If the Assistant previously suggested using a tool (like requirement_analyzer or dependency_impact_analyzer) and the User is agreeing (e.g. "ok", "继续", "查吧"), set trigger_tool to true and specify the tool and intent.
+
+Return ONLY valid JSON (no markdown block, just raw JSON):
+{
+   "rewritten_query": "The fully resolved query",
+   "trigger_tool": boolean,
+   "tool_name": "requirement_analyzer" | "dependency_impact_analyzer" | "draft_prd" | null,
+   "tool_intent": "What to pass to the tool if triggered, else null"
+}
+`;
+        const openaiClient = new OpenAI({
+            apiKey: process.env.DASHSCOPE_API_KEY || "sk-dummy",
+            baseURL: process.env.OPENAI_BASE_URL || "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        });
+        const intentResp = await openaiClient.chat.completions.create({
+            model: "qwen-plus",
+            messages: [{ role: "user", content: intentPrompt }]
+        });
+        const intentJsonStr = intentResp.choices[0].message.content || "{}";
+        const intentResult = JSON.parse(intentJsonStr.replace(/```json/g, '').replace(/```/g, '').trim());
+
+        if (intentResult.rewritten_query) {
+            rewrittenQuery = intentResult.rewritten_query;
+            console.log(`[Intent Engine] Rewrote query to: ${rewrittenQuery}`);
+        }
+        if (intentResult.trigger_tool && intentResult.tool_name) {
+            forceToolTrigger = true;
+            forcedToolName = intentResult.tool_name;
+            forcedToolIntent = intentResult.tool_intent || rewrittenQuery;
+            console.log(`[Intent Engine] Tool Trigger Detected: ${forcedToolName}`);
+        }
+    } catch (e) {
+        console.error("Intent Engine failed, falling back to original query:", e);
+    }
+
+    // --- Implicit Pre-Retrieval (Auto-Context) ---
+    let autoContext = "";
+
+    try {
+        console.log(`[Auto-Context] Fetching pre-retrieval for rewritten query: ${rewrittenQuery.substring(0, 30)}...`);
+        emitEvent({ type: 'audit_progress', message: '检索核心知识库...', step: 2 });
+        emitEvent({ type: 'tool', name: 'retrieve_knowledge', args: { query: rewrittenQuery } });
+        executedTools.push({ name: 'retrieve_knowledge', args: { query: rewrittenQuery } });
+
+        const ragResult = await retrieveKnowledge({ query: rewrittenQuery, projectName, documentIds }, domainId);
+        autoContext = typeof ragResult === 'object' ? JSON.stringify(ragResult) : String(ragResult);
+
+        emitEvent({ type: 'tool_result', name: 'retrieve_knowledge', result: ragResult });
+    } catch (e) {
+        console.error("Auto-Context retrieval failed:", e);
+        emitEvent({ type: 'tool_result', name: 'retrieve_knowledge', result: { error: "Auto-Context Failed" } });
+    }
 
     try {
         let modelTag = "qwen-plus";
@@ -352,51 +352,33 @@ app.post('/chat', async (req, res) => {
             console.error("Redis fetch failed defaulting to gemini", err);
         }
 
-        const systemPrompt = `You are 'Nexis', an Advanced Business Analyst Agent.
-                
-**Your Core Loop (ReAct):**
-1. **Retrieve**: When the user asks a question or proposes a change, FIRST use \`retrieve_knowledge\` to gather context (Vector + Graph).
-2. **Reason**: Analyze the retrieved info. Does the user's request conflict with existing rules? Is it ambiguous?
-3. **Act**: 
-    - If checking for consistency, call \`check_conflict\` with the context you found.
-    - If making a change, DISCUSS with the user first, then use \`update_knowledge\`.
-    - If answering a question, uses the retrieved knowledge.
+        const systemPrompt = `You are 'Nexis', a precise Advanced Business Analyst Agent.
+You MUST rely on the [System Auto-Context] provided below to answer the user's questions.
 
-**Taxonomy Management (AI Suggestions Queue):**
-- If the user asks about new, pending, or AI-suggested categories, use \`review_taxonomy_queue\` with action="FETCH" to see the list.
-- If the user asks you to approve or reject them, use \`review_taxonomy_queue\` with action="APPROVE" or "REJECT". Always confirm the exact paths you will approve before executing.
+**CRITICAL ANSWERING RULES**:
+1. **BE DIRECT AND HIGHLY SPECIFIC**: Do not give abstract summaries. If the user asks about a "流程" (Process) or "规则" (Rule), you MUST extract the exact steps, conditions, or rules mentioned in the Context. If the context says Step A -> Step B, output Step A -> Step B.
+2. **DO NOT WANDER**: Do not say "it is related to X and Y" if the user asked "What is the process?". Just give the process directly.
+3. Label facts from the context as '【基于知识库】'.
+4. If the [System Auto-Context] does not contain enough specific details to answer the exact question, you may call \`retrieve_knowledge\` manually with a more specific query.
 
-**Key Rule**: Do not guess. If you lack info, Retrieve it.
-**Information Separation Rule**: When answering, prioritize facts retrieved from the Knowledge Base (Nexis PRD) and label them '【基于知识库】'. ONLY include your own general industry knowledge (labeled '【通用行业知识补充】') IF the retrieved facts are insufficient or if the user asks for a broader explanation. If the PRD knowledge alone answers the user's question completely, DO NOT add unnecessary general knowledge.
-
-**Entity / Project Name Anti-Hallucination Rule (CRITICAL)**: 
-1. If the user explicitly mentions a project name or document title (e.g., "Project A") or uses the @ mention, you MUST deeply check the 'source' filename in the retrieved context. 
-2. DO NOT assume a file is about "Project A" if its name does not explicitly contain "Project A".
-3. ONLY IF the user's intent is tied to a specific project name and NO retrieved sources match that name, you MUST reply: "【基于知识库】：未在知识库中找到关于特定项目《X》的专属内容，但为您找到了以下相关功能点..."
-4. IF THE USER IS ASKING ABOUT A DOCUMENT THEY JUST UPLOADED OR A GENERAL PROCESS (like "出票登记流程"), AND YOU FOUND RELEVANT CONTENT, JUST ANSWER DIRECTLY without any "not found" disclaimers. Use the content from the retrieved sources (including SANDBOX ones) to answer.
-5. NEVER say "Project X (即 Project Y)" or "Project X is Project Y". They are DIFFERENT THINGS unless explicitly and factually stated in the text.
-
-**Semantic Retrieval Rule (CRITICAL)**:
-When formulating the \`query\` argument for \`retrieve_knowledge\`, DO NOT over-abstract. If the user's prompt contains specific, highly-contextual nouns or features (e.g. '导流路径', '审批流', '回帖路径'), you MUST include those EXACT terms in your query string. Searching for generic terms like "新增功能" will fail to retrieve highly-specific vector chunks.
-
-**Metadata Anti-Distraction Rule (CRITICAL)**: 
-1. DO NOT search for technical identifiers, file extensions (e.g., .docx, .pdf, .md), or date-strings (e.g., 20221227) found in the 'Source' labels or context of retrieved results. 
-2. These are system metadata, not business concepts. Searching for them leads to infinite loops and poor performance.
-
-**Proactive Copilot Rule (CRITICAL)**:
-If the user uses "what if" scenarios (e.g., "如果支持...", "可以实现吗") to ask about adding a new capability or proposing a process change:
-1. **Dependency Pre-check**: You MUST first use \`retrieve_knowledge\` to check the current rules and dependencies.
-2. **Dissonance Detection**: If the user's proposal explicitly violates a "Terminal Sequential Rule" or state flow in the retrieved PRD, you MUST start your response by pointing out the factual conflict: "【发现冲突】: 您提出的方案与现有流程不一致...". Do NOT blindly agree to a hypothetical change if the facts say otherwise.
-3. AFTER acknowledging any conflicts, if they asked to evaluate feasibility or draft a PRD, you MUST call \`simulate_impact\` and then \`draft_prd\`. You are acting as an active Business Architect, but anchored in truth.
-NEVER attempt to write or draft a PRD directly in the chat response. You MUST ALWAYS use the \`draft_prd\` tool to generate it.
-When a tool returns a \`saved_path\` along with markdown content (like \`prd_markdown\`, \`test_markdown\`, or \`report_markdown\`), you MUST output the FULL markdown content directly in your response so the user can read it, and then append "【文件已存档】：\`$PATH\`" at the very end.`;
+**PROACTIVE ARCHITECT RULE (CRITICAL)**:
+If the user uses "what if" scenarios (e.g., "如果要实现...", "如果修改...", "系统需要做哪些调整") or explicitly asks to analyze impact (e.g., "评估一下影响", "这个表/字段/功能被谁依赖"):
+1. You MUST IMMEDIATELY call the \`requirement_analyzer\` tool with action="analyze" or action="detect_gaps" for business logic questions.
+2. You MUST IMMEDIATELY call the \`dependency_impact_analyzer\` tool with action="simulate_impact" or action="trace_dependencies" for codebase, database, or structural lineage questions.
+3. After analysis, if they asked for a PRD or evaluation, you MUST then call \`draft_prd\`.
+4. NEVER just guess the system adjustments. ALWAYS use the \`requirement_analyzer\` or \`dependency_impact_analyzer\` tools to perform a deep architectural audit when they propose changes.
+${forceToolTrigger ? `
+**INTENT ENGINE OVERRIDE (CRITICAL DIRECTIVE)**:
+The User has explicitly agreed to your previous suggestion to use a tool.
+YOU MUST IMMEDIATELY and EXCLUSIVELY call the tool \`${forcedToolName}\` with the intent text: "${forcedToolIntent}".
+DO NOT provide conversational filler. DO NOT summarize. JUST EXECUTE THE TOOL CALL NOW.
+` : ''}`;
 
         let finalText = "";
-        const executedTools = [];
 
         if (modelTag.toLowerCase().includes('qwen') || modelTag.toLowerCase().includes('gpt')) {
             // -- OPENAI COMPATIBLE EXECUTION (Qwen-Plus) --
-            const openaiTools = tools.map(t => ({
+            const openaiTools = chatTools.map(t => ({
                 type: "function" as const,
                 function: {
                     name: t.name,
@@ -405,20 +387,36 @@ When a tool returns a \`saved_path\` along with markdown content (like \`prd_mar
                 }
             }));
 
-            const messages: any[] = [
-                { role: "system", content: systemPrompt }
-            ];
-
-            // Map DB history to OpenAI format
+            // Map DB history to OpenAI format first
+            const pastMessages: any[] = [];
             if (dbMessages && dbMessages.length > 0) {
                 for (const msg of dbMessages) {
-                    messages.push({
+                    pastMessages.push({
                         role: msg.role === 'assistant' ? 'assistant' : 'user',
                         content: msg.content
                     });
                 }
             }
-            const promptContext = projectName ? `[Project Context: ${projectName}]\n${query}` : query;
+
+            // Build Contextual System Prompt
+            // By putting Auto-Context here instead of in the user's latest message,
+            // we preserve the conversational continuity for short queries like "continue"
+            const contextualSystemPrompt = `${systemPrompt}
+            
+---
+[Pre-Retrieved System Auto-Context For Current Query]
+${autoContext}
+
+[Project Scope: ${projectName || 'None'}]
+---`;
+
+            const messages: any[] = [
+                { role: "system", content: contextualSystemPrompt },
+                ...pastMessages
+            ];
+
+
+            const promptContext = query; // Just the query, keep it conversational
             messages.push({ role: "user", content: promptContext });
 
             let loopCount = 0;
@@ -482,12 +480,12 @@ When a tool returns a \`saved_path\` along with markdown content (like \`prd_mar
                             toolResult = { content: loadKnowledge() };
                         } else if (name === "review_taxonomy_queue") {
                             toolResult = await reviewTaxonomyQueue(args, domainId);
-                        } else if (name === "simulate_impact" || name === "trace_dependencies" || name === "explain_lineage") {
-                            toolResult = await dependencyImpactAnalyzer({ action: name, ...args, projectName });
+                        } else if (name === "dependency_impact_analyzer") {
+                            toolResult = await dependencyImpactAnalyzer({ ...args, projectName });
                         } else if (name === "draft_prd") {
-                            toolResult = await draftPrd(args);
-                        } else if (name === "compare_requirements" || name === "check_compliance" || name === "detect_gaps" || name === "analyze_requirement") {
-                            toolResult = await requirementAnalyzer({ action: name, ...args, projectName }, domainId);
+                            toolResult = await draftPrd({ ...args, projectName });
+                        } else if (name === "requirement_analyzer") {
+                            toolResult = await requirementAnalyzer({ ...args, projectName }, domainId);
                         } else if (name === "get_document_content") {
                             toolResult = await getDocumentContent(args.fileId);
                         } else {
@@ -517,7 +515,7 @@ When a tool returns a \`saved_path\` along with markdown content (like \`prd_mar
             // -- GEMINI NATIVE EXECUTION --
             const model = genAI.getGenerativeModel({
                 model: "gemini-3-flash-preview",
-                tools: [{ functionDeclarations: tools }],
+                tools: [{ functionDeclarations: chatTools }],
             });
 
             // Initialize chat history with system prompt
@@ -532,7 +530,7 @@ When a tool returns a \`saved_path\` along with markdown content (like \`prd_mar
                 }
             ];
 
-            // Format db history format to Gemini history format
+            // Format db history to Gemini history format
             if (dbMessages && dbMessages.length > 0) {
                 for (const msg of dbMessages) {
                     formattedHistory.push({
@@ -542,9 +540,21 @@ When a tool returns a \`saved_path\` along with markdown content (like \`prd_mar
                 }
             }
 
+            // Inject the Auto-Context right before the latest user message conversationally
+            if (autoContext.trim().length > 10) {
+                formattedHistory.push({
+                    role: "user",
+                    parts: [{ text: `[System Auto-Context for reference]:\n${autoContext}\n[Project: ${projectName || 'None'}]` }]
+                });
+                formattedHistory.push({
+                    role: "model",
+                    parts: [{ text: "Context acknowledged. I will use this for the next query." }]
+                });
+            }
+
             const chat = model.startChat({ history: formattedHistory as any });
 
-            const promptContext = projectName ? `[Project Context: ${projectName}]\n${query}` : query;
+            const promptContext = query; // Just the query, keep it conversational
             let result = await chat.sendMessage(promptContext);
             let response = result.response;
 
@@ -580,12 +590,12 @@ When a tool returns a \`saved_path\` along with markdown content (like \`prd_mar
                             toolResult = { content: loadKnowledge() };
                         } else if (name === "review_taxonomy_queue") {
                             toolResult = await reviewTaxonomyQueue(args, domainId);
-                        } else if (name === "simulate_impact" || name === "trace_dependencies" || name === "explain_lineage") {
-                            toolResult = await dependencyImpactAnalyzer({ action: name, ...args, projectName });
+                        } else if (name === "dependency_impact_analyzer") {
+                            toolResult = await dependencyImpactAnalyzer({ ...args, projectName });
                         } else if (name === "draft_prd") {
-                            toolResult = await draftPrd(args);
-                        } else if (name === "compare_requirements" || name === "check_compliance" || name === "detect_gaps" || name === "analyze_requirement") {
-                            toolResult = await requirementAnalyzer({ action: name, ...args, projectName }, domainId);
+                            toolResult = await draftPrd({ ...args, projectName });
+                        } else if (name === "requirement_analyzer") {
+                            toolResult = await requirementAnalyzer({ ...args, projectName }, domainId);
 
                             // Phase 3: Persist the Architect Report to the database
                             if (toolResult && toolResult.verdict === "ANALYZED") {
@@ -681,7 +691,7 @@ ${text}
 
         if (modelTag.toLowerCase().includes('qwen') || modelTag.toLowerCase().includes('gpt')) {
             // -- OPENAI COMPATIBLE EXECUTION (Qwen-Plus) --
-            const openaiTools = tools.map(t => ({
+            const openaiTools = ingestTools.map(t => ({
                 type: "function" as const,
                 function: {
                     name: t.name,
@@ -770,7 +780,7 @@ ${text}
             // -- GEMINI NATIVE EXECUTION --
             const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" }, { apiVersion: "v1beta" });
             const chatSession = model.startChat({
-                tools: [{ functionDeclarations: tools }]
+                tools: [{ functionDeclarations: ingestTools }]
             });
 
             let result = await chatSession.sendMessage([{ text: systemPrompt }]);

@@ -58,7 +58,7 @@ async function getProvider(): Promise<string> {
 export async function draftPrd(input: DraftPrdInput): Promise<DraftPrdResult> {
     let { proposal, impact_report } = input;
     if (!impact_report) {
-        impact_report = await dependencyImpactAnalyzer({ action: 'simulate_impact', proposed_feature: proposal, search_keywords: proposal });
+        impact_report = await dependencyImpactAnalyzer({ action: 'simulate_impact', intent_text: proposal });
     }
     const provider = await getProvider();
 
