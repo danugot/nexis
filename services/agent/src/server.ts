@@ -282,22 +282,24 @@ app.post('/chat', async (req, res) => {
         emitEvent({ type: 'audit_progress', message: '分析上下文意图与指代...', step: 1 });
         const recentHistory = dbMessages.slice(-4).map(m => `${m.role.toUpperCase()}: ${m.content}`).join("\n");
         const intentPrompt = `
-You are 'Nexis Intent Engine', a coreference resolution and tool dispatch router.
+You are a fast, strict Intent & Coreference Router.
 
-Recent Conversation History:
+Recent History:
 ${recentHistory}
 
-Latest User Query: "${query}"
+User Query: "${query}"
 
-TASK 1 (Coreference): Rewrite the User Query to be completely self-contained for a semantic search engine. If they say "继续" (continue), "为什么" (why), or use pronouns, add the specific context from the history.
-TASK 2 (Tool Dispatch): If the Assistant previously suggested using a tool (like requirement_analyzer or dependency_impact_analyzer) and the User is agreeing (e.g. "ok", "继续", "查吧"), set trigger_tool to true and specify the tool and intent.
+RULES:
+1. "rewritten_query": Resolve pronouns and vague context (e.g., "继续" -> "继续按上文流程分析"). MUST BE IN CHINESE. MUST BE EXTREMELY CONCISE (under 15 words). Do NOT translate to English. Do NOT add complex system instructions. If the query is already clear, return it EXACTLY as is.
+2. "trigger_tool": ONLY set to true if the User is EXPLICITLY agreeing to use a tool that the Assistant JUST suggested in the history.
+3. "tool_intent": If triggering a tool, provide a CONCISE description in Chinese.
 
-Return ONLY valid JSON (no markdown block, just raw JSON):
+Return ONLY valid JSON (no markdown):
 {
-   "rewritten_query": "The fully resolved query",
+   "rewritten_query": "string (strictly concise, Chinese)",
    "trigger_tool": boolean,
    "tool_name": "requirement_analyzer" | "dependency_impact_analyzer" | "draft_prd" | null,
-   "tool_intent": "What to pass to the tool if triggered, else null"
+   "tool_intent": "string or null"
 }
 `;
         const openaiClient = new OpenAI({
@@ -305,7 +307,7 @@ Return ONLY valid JSON (no markdown block, just raw JSON):
             baseURL: process.env.OPENAI_BASE_URL || "https://dashscope.aliyuncs.com/compatible-mode/v1"
         });
         const intentResp = await openaiClient.chat.completions.create({
-            model: "qwen-plus",
+            model: "qwen-turbo",
             messages: [{ role: "user", content: intentPrompt }]
         });
         const intentJsonStr = intentResp.choices[0].message.content || "{}";
