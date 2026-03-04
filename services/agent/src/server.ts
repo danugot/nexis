@@ -277,6 +277,7 @@ app.post('/chat', async (req, res) => {
     let forceToolTrigger = false;
     let forcedToolName: string | null = null;
     let forcedToolIntent: string | null = null;
+    let isInformationalQuery = true; // Safe default for simple informational queries
 
     try {
         emitEvent({ type: 'audit_progress', message: '分析上下文意图与指代...', step: 1 });
@@ -293,13 +294,15 @@ RULES:
 1. "rewritten_query": Resolve pronouns and vague context (e.g., "继续" -> "继续按上文流程分析"). MUST BE IN CHINESE. MUST BE EXTREMELY CONCISE (under 15 words). Do NOT translate to English. Do NOT add complex system instructions. If the query is already clear, return it EXACTLY as is.
 2. "trigger_tool": ONLY set to true if the User is EXPLICITLY agreeing to use a tool that the Assistant JUST suggested in the history.
 3. "tool_intent": If triggering a tool, provide a CONCISE description in Chinese.
+4. "is_informational_query": Set to TRUE if the user is asking a straightforward informational question (e.g., "有哪些错误码", "流程是什么", "分析发生的原因等客观知识抽取"). Set to FALSE ONLY if the user is asking to simulate changes, trace dependencies in codebase/DB, or draft documents (e.g., "如果要增加人脸识别", "生成PRD"). WHEN IN DOUBT, SET TO TRUE.
 
 Return ONLY valid JSON (no markdown):
 {
    "rewritten_query": "string (strictly concise, Chinese)",
    "trigger_tool": boolean,
    "tool_name": "requirement_analyzer" | "dependency_impact_analyzer" | "draft_prd" | null,
-   "tool_intent": "string or null"
+   "tool_intent": "string or null",
+   "is_informational_query": boolean
 }
 `;
         const openaiClient = new OpenAI({
@@ -316,6 +319,12 @@ Return ONLY valid JSON (no markdown):
         if (intentResult.rewritten_query) {
             rewrittenQuery = intentResult.rewritten_query;
             console.log(`[Intent Engine] Rewrote query to: ${rewrittenQuery}`);
+        }
+        if (intentResult.is_informational_query === false) {
+            isInformationalQuery = false;
+            console.log(`[Intent Engine] Mega-Tool analysis required. Permitting full access.`);
+        } else {
+            console.log(`[Intent Engine] Informational Query Detected. Stripping Mega-Tools to prevent over-engineering.`);
         }
         if (intentResult.trigger_tool && intentResult.tool_name) {
             forceToolTrigger = true;
@@ -362,13 +371,6 @@ You MUST rely on the [System Auto-Context] provided below to answer the user's q
 2. **DO NOT WANDER**: Do not say "it is related to X and Y" if the user asked "What is the process?". Just give the process directly.
 3. Label facts from the context as '【基于知识库】'.
 4. If the [System Auto-Context] does not contain enough specific details to answer the exact question, you may call \`retrieve_knowledge\` manually with a more specific query.
-
-**PROACTIVE ARCHITECT RULE (CRITICAL)**:
-If the user uses "what if" scenarios (e.g., "如果要实现...", "如果修改...", "系统需要做哪些调整") or explicitly asks to analyze impact (e.g., "评估一下影响", "这个表/字段/功能被谁依赖"):
-1. You MUST IMMEDIATELY call the \`requirement_analyzer\` tool with action="analyze" or action="detect_gaps" for business logic questions.
-2. You MUST IMMEDIATELY call the \`dependency_impact_analyzer\` tool with action="simulate_impact" or action="trace_dependencies" for codebase, database, or structural lineage questions.
-3. After analysis, if they asked for a PRD or evaluation, you MUST then call \`draft_prd\`.
-4. NEVER just guess the system adjustments. ALWAYS use the \`requirement_analyzer\` or \`dependency_impact_analyzer\` tools to perform a deep architectural audit when they propose changes.
 ${forceToolTrigger ? `
 **INTENT ENGINE OVERRIDE (CRITICAL DIRECTIVE)**:
 The User has explicitly agreed to your previous suggestion to use a tool.
@@ -378,9 +380,15 @@ DO NOT provide conversational filler. DO NOT summarize. JUST EXECUTE THE TOOL CA
 
         let finalText = "";
 
+        let finalChatTools = chatTools;
+        if (isInformationalQuery && !forceToolTrigger) {
+            // Strip mega tools completely for simple informational queries
+            finalChatTools = chatTools.filter(t => !['requirement_analyzer', 'dependency_impact_analyzer', 'draft_prd'].includes(t.name));
+        }
+
         if (modelTag.toLowerCase().includes('qwen') || modelTag.toLowerCase().includes('gpt')) {
             // -- OPENAI COMPATIBLE EXECUTION (Qwen-Plus) --
-            const openaiTools = chatTools.map(t => ({
+            const openaiTools = finalChatTools.map(t => ({
                 type: "function" as const,
                 function: {
                     name: t.name,
@@ -517,7 +525,7 @@ ${autoContext}
             // -- GEMINI NATIVE EXECUTION --
             const model = genAI.getGenerativeModel({
                 model: "gemini-3-flash-preview",
-                tools: [{ functionDeclarations: chatTools }],
+                tools: [{ functionDeclarations: finalChatTools }],
             });
 
             // Initialize chat history with system prompt
