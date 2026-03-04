@@ -1002,14 +1002,21 @@ async def retrieve(request: QueryRequest, db: Session = Depends(get_db)):
 
     # 2. Graph Search (Simple Keyword Extraction from Query)
     # Use jieba to extract meaningful nouns/terms, filter out stop words
-    ignore_words = {"功能", "实现", "主要", "哪些", "怎么", "什么", "如何", "系统", "模块", "项目", "docx", "pdf", "md", "txt", "xlsx", "pptx"}
+    ignore_words = {
+        "功能", "实现", "主要", "哪些", "怎么", "什么", "如何", "系统", "模块", 
+        "项目", "docx", "pdf", "md", "txt", "xlsx", "pptx",
+        "流程", "步骤", "顺序", "说明", "操作", "逻辑", "处理", 
+        "分析", "关联", "影响", "具体", "包含", "状态", "环节"
+    }
     parts = []
+    
+    # Heuristic: only use words >= 2 chars, unless it's a critical single char business term
     for word in jieba.cut(request.query):
         w = word.strip()
-        if len(w) > 1 and w not in ignore_words:
+        if len(w) >= 2 and w not in ignore_words:
             parts.append(w)
             
-    search_terms = parts if parts else [request.query]
+    search_terms = parts if parts else [] # Do not fallback to the raw query if no valid nouns are found
     
     # DIAGNOSTIC: Search Term Expansion
     expanded_terms = []
@@ -1025,6 +1032,11 @@ async def retrieve(request: QueryRequest, db: Session = Depends(get_db)):
     
     graph_facts_set = set()
     for term in search_terms:
+        # A hard stop limit: do not execute graph search on extremely short terms
+        if len(term) < 2:
+            print(f"[DIAGNOSTIC] Skipped Graph Search for too short term: {term}")
+            continue
+            
         print(f"[DIAGNOSTIC] Fallback keyword Graph Search for: {term}")
         facts = query_graph(term, domain_id=request.domain_id, project_name=request.project_name, status_filter=request.status_filter)
         graph_facts_set.update(facts)
