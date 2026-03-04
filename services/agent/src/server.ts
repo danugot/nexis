@@ -261,10 +261,20 @@ app.post('/chat', async (req, res) => {
     }
 
     // Setup SSE
+    req.setTimeout(0); // Disable request timeout for long Mega-Tool runs
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.flushHeaders();
+
+    // Start SSE Heartbeat to keep intermediate proxies (like Nginx) alive
+    const heartbeatInterval = setInterval(() => {
+        res.write(':\\n\\n');
+    }, 15000);
+
+    req.on('close', () => {
+        clearInterval(heartbeatInterval);
+    });
 
     const executedTools = [];
 
@@ -695,6 +705,7 @@ ${autoContext}
 
     emitEvent({ type: 'done' });
     emitEvent('[DONE]');
+    clearInterval(heartbeatInterval);
     res.end();
 });
 
