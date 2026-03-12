@@ -951,6 +951,17 @@ async def retrieve(request: QueryRequest, db: Session = Depends(get_db)):
     # Instead, we check if the user explicitly provided a project. If not, we scan the natural
     # language query against known project names in the database.
     detected_projects = []
+    
+    def is_fuzzy_match(p_name, query):
+        if not p_name or not query: return False
+        if p_name in query or query in p_name: return True
+        # Sliding window for Chinese names: if any 4-char sequence of the project name exists in the query
+        if len(p_name) >= 4:
+            for i in range(len(p_name) - 3):
+                if p_name[i:i+4] in query:
+                    return True
+        return False
+        
     if request.project_name:
         detected_projects.append(request.project_name)
     elif request.domain_id:
@@ -961,7 +972,7 @@ async def retrieve(request: QueryRequest, db: Session = Depends(get_db)):
         ).distinct().all()
         
         for (p_name,) in all_projects:
-            if p_name and p_name in request.query:
+            if is_fuzzy_match(p_name, request.query):
                 detected_projects.append(p_name)
                 
     if detected_projects:
