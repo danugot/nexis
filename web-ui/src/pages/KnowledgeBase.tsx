@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { Upload, Archive, RefreshCw, FileText, AlertTriangle, FolderOpen, Layers } from 'lucide-react';
+import { Upload, Archive, RefreshCw, FileText, AlertTriangle, FolderOpen, Layers, Trash2, ArrowUp, ArrowDown, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -65,6 +65,7 @@ export default function KnowledgeBase() {
     const [loading, setLoading] = useState(true);
     const [uploadOpen, setUploadOpen] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
     // Project Documents View State
     const [viewProjectOpen, setViewProjectOpen] = useState(false);
@@ -115,8 +116,55 @@ export default function KnowledgeBase() {
         fetchProjects();
     }, [activeDomain]);
 
+    const handleDeleteProject = async (projectId: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!confirm('Are you sure you want to permanently delete this project and all its documents? This action cannot be undone.')) return;
+        
+        try {
+            const res = await fetch(`${API_BASE_URL}/projects/${projectId}`, {
+                method: 'DELETE',
+            });
+            const data = await res.json();
+            if (data.status === 'success') {
+                setProjects(prev => prev.filter(p => p.id !== projectId));
+                if (selectedProject?.id === projectId) {
+                    setViewProjectOpen(false);
+                    setSelectedProject(null);
+                }
+            } else {
+                alert('Failed to delete project: ' + data.detail);
+            }
+        } catch (error) {
+            console.error('Failed to delete project', error);
+            alert('Error deleting project');
+        }
+    };
+
+    const moveFileUp = (index: number) => {
+        if (index === 0) return;
+        const newFiles = [...selectedFiles];
+        [newFiles[index - 1], newFiles[index]] = [newFiles[index], newFiles[index - 1]];
+        setSelectedFiles(newFiles);
+    };
+
+    const moveFileDown = (index: number) => {
+        if (index === selectedFiles.length - 1) return;
+        const newFiles = [...selectedFiles];
+        [newFiles[index + 1], newFiles[index]] = [newFiles[index], newFiles[index + 1]];
+        setSelectedFiles(newFiles);
+    };
+
+    const removeSelectedFile = (index: number) => {
+        const newFiles = [...selectedFiles];
+        newFiles.splice(index, 1);
+        setSelectedFiles(newFiles);
+    };
+
     const handleUpload = async (data: any) => {
-        if (!data.files || data.files.length === 0) return;
+        if (selectedFiles.length === 0) {
+            alert("Please select at least one file.");
+            return;
+        }
         if (!data.projectName) {
             alert("Project Name is mandatory to create a Knowledge Set.");
             return;
@@ -147,7 +195,7 @@ export default function KnowledgeBase() {
             formData.append('version', data.version);
             if (data.jiraId) formData.append('jiraId', data.jiraId);
 
-            Array.from(data.files).forEach((file: any) => {
+            selectedFiles.forEach((file: File) => {
                 formData.append('files', file);
             });
 
@@ -157,6 +205,7 @@ export default function KnowledgeBase() {
             });
 
             setUploadOpen(false);
+            setSelectedFiles([]);
             reset();
             fetchProjects();
         } catch (error) {
@@ -281,8 +330,45 @@ export default function KnowledgeBase() {
                                 </div>
                                 <div className="space-y-2 border-t pt-4">
                                     <Label htmlFor="files">Select Files (Markdown, Docx, PDF, etc.)</Label>
-                                    <Input id="files" type="file" multiple {...register('files', { required: true })} />
-                                    <p className="text-xs text-muted-foreground">You can select multiple files at once using Shift or Ctrl/Cmd.</p>
+                                    <Input 
+                                        id="files" 
+                                        type="file" 
+                                        multiple 
+                                        onChange={(e) => {
+                                            if (e.target.files) {
+                                                // Append newly selected files to the list
+                                                setSelectedFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+                                                // Reset input so the same files can be selected again if needed
+                                                e.target.value = '';
+                                            }
+                                        }} 
+                                    />
+                                    <p className="text-xs text-muted-foreground">The order of these files dictates their processing priority. Order carefully!</p>
+                                    
+                                    {selectedFiles.length > 0 && (
+                                        <div className="mt-3 border rounded-md divide-y max-h-48 overflow-y-auto">
+                                            {selectedFiles.map((file, idx) => (
+                                                <div key={`${file.name}-${idx}`} className="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-900/50 text-sm">
+                                                    <div className="flex items-center gap-2 truncate pr-4">
+                                                        <span className="text-muted-foreground font-mono text-xs">{idx + 1}.</span>
+                                                        <FileText size={14} className="text-indigo-400 shrink-0" />
+                                                        <span className="truncate">{file.name}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-1 shrink-0">
+                                                        <Button type="button" variant="ghost" size="icon" className="h-6 w-6" disabled={idx === 0} onClick={() => moveFileUp(idx)}>
+                                                            <ArrowUp size={14} />
+                                                        </Button>
+                                                        <Button type="button" variant="ghost" size="icon" className="h-6 w-6" disabled={idx === selectedFiles.length - 1} onClick={() => moveFileDown(idx)}>
+                                                            <ArrowDown size={14} />
+                                                        </Button>
+                                                        <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => removeSelectedFile(idx)}>
+                                                            <X size={14} />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Target Domain</Label>
@@ -353,6 +439,15 @@ export default function KnowledgeBase() {
                                             className="text-xs mr-2"
                                         >
                                             View Content
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={(e) => handleDeleteProject(proj.id, e)}
+                                            className="text-slate-500 hover:text-red-500 hover:bg-red-50"
+                                            title="Delete Project"
+                                        >
+                                            <Trash2 size={16} />
                                         </Button>
                                     </TableCell>
                                 </TableRow>

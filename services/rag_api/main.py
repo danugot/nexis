@@ -425,7 +425,7 @@ def query_graph(search_term, domain_id=None, project_name=None, status_filter=No
                 {doc_filter}
                 OPTIONAL MATCH (e)-[:BELONGS_TO]->(tx:TaxonomyNode)
                 {domain_match}
-                RETURN e.name + ' (' + e.type + ') belongs to Category: ' + coalesce(tx.name, 'Unknown') + ' [Source: ' + d.name + ']' as fact
+                RETURN e.name + ' (' + e.type + ') belongs to Category: ' + coalesce(tx.name, 'Unknown') + ' [Source: ' + coalesce(d.projectName + ' / ', '') + d.name + ']' as fact
                 LIMIT 10
                 
                 UNION
@@ -437,7 +437,7 @@ def query_graph(search_term, domain_id=None, project_name=None, status_filter=No
                 MATCH (e:Entity)-[:BELONGS_TO]->(tx)
                 MATCH (e)-[:MENTIONED_IN]->(d:Document)
                 {doc_filter}
-                RETURN 'Category ' + tx.name + ' contains: ' + coalesce(e.name, 'No entities') + ' [Source: ' + d.name + ']' as fact
+                RETURN 'Category ' + tx.name + ' contains: ' + coalesce(e.name, 'No entities') + ' [Source: ' + coalesce(d.projectName + ' / ', '') + d.name + ']' as fact
                 LIMIT 15
                 
                 UNION
@@ -450,7 +450,7 @@ def query_graph(search_term, domain_id=None, project_name=None, status_filter=No
                 MATCH (e)-[:MENTIONED_IN]->(d:Document)
                 {doc_filter}
                 {domain_match}
-                RETURN e.name + ' [Relation: ' + type(r) + '] ' + m.name + ' [Source: ' + d.name + ']' as fact
+                RETURN e.name + ' [Relation: ' + type(r) + '] ' + m.name + ' [Source: ' + coalesce(d.projectName + ' / ', '') + d.name + ']' as fact
                 LIMIT 20
                 """,
                 term=search_term,
@@ -637,6 +637,31 @@ async def create_project(req: ProjectCreate, db: Session = Depends(get_db)):
             print(f"Warning: Failed to create Project node in Neo4j: {str(e)}")
             
     return {"status": "success", "id": new_project.id}
+
+@app.delete("/projects/{project_id}")
+async def delete_project(project_id: str, db: Session = Depends(get_db)):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+        
+    db.delete(project)
+    db.commit()
+    
+    # Cascade detach and delete Project from Neo4j graph
+    if neo4j_driver:
+        try:
+            with neo4j_driver.session() as session:
+                session.run(
+                    """
+                    MATCH (p:Project {id: $pid})
+                    DETACH DELETE p
+                    """,
+                    pid=project_id
+                )
+        except Exception as e:
+            print(f"Warning: Failed to delete Project node in Neo4j: {str(e)}")
+            
+    return {"status": "success"}
 
 @app.get("/projects/{project_id}/documents")
 async def get_project_documents(project_id: str, db: Session = Depends(get_db)):
@@ -918,11 +943,44 @@ async def get_document_trace(filename: str):
 @app.post("/retrieve")
 async def retrieve(request: QueryRequest, db: Session = Depends(get_db)):
     context_items = []
+    
+    from sqlalchemy import or_, and_, String
+    
+    # --- Systemic Project Auto-Detection & Metadata Injection ---
+    # To prevent context window explosion, we do NOT inject the entire domain's documents.
+    # Instead, we check if the user explicitly provided a project. If not, we scan the natural
+    # language query against known project names in the database.
+    detected_projects = []
+    if request.project_name:
+        detected_projects.append(request.project_name)
+    elif request.domain_id:
+        # Fetch all distinct project names in this domain
+        all_projects = db.query(Document.projectName).filter(
+            Document.domainId == request.domain_id,
+            Document.projectName.is_not(None)
+        ).distinct().all()
+        
+        for (p_name,) in all_projects:
+            if p_name and p_name in request.query:
+                detected_projects.append(p_name)
+                
+    if detected_projects:
+        for p_name in detected_projects:
+            project_docs = db.query(Document).filter(
+                Document.projectName.ilike(f"%{p_name}%"),
+                Document.status.in_(request.status_filter if request.status_filter else ["EFFECTIVE", "DRAFT", "SANDBOX"])
+            ).all()
+            
+            if project_docs:
+                doc_list = ", ".join(set([d.filename for d in project_docs]))
+                context_items.append({
+                    "type": "metadata",
+                    "content": f"The project '{p_name}' explicitly contains the following active documents: {doc_list}. If asked what documents are in this project, use this list.",
+                    "source": "System-Metadata"
+                })
 
     # 1. Vector Search
     where_clause = None
-    
-    from sqlalchemy import or_, and_, String
     
     # Base filter: always respect the status_filter (which defaults to EFFECTIVE, DRAFT, SANDBOX)
     base_query = db.query(Document).filter(Document.status.in_(request.status_filter))
@@ -1066,13 +1124,20 @@ async def retrieve(request: QueryRequest, db: Session = Depends(get_db)):
             
             for vid, score in sorted_rrf[:request.n_results]:
                 doc, meta = doc_map[vid]
+                
+                # Fetch project name natively from ChromaDB metadata payload
+                p_name = meta.get("projectName")
+                source_str = meta.get("source", "unknown")
+                if p_name:
+                    source_str = f"{p_name} / {source_str}"
+                
                 # HARD CUTOFF: If RRF score is terrible (e.g., both rankings > 50), skip it entirely
                 # or if the user question has NO keyword matches and NOT the #1 vector match.
                 # Here we just take the mathematically best RRF bounds.
                 context_items.append({
                     "type": "vector",
                     "content": doc,
-                    "source": meta.get("source", "unknown"),
+                    "source": source_str,
                     "rrf_score": score
                 })
         except Exception as e:
