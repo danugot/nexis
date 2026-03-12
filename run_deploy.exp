@@ -1,0 +1,41 @@
+#!/usr/bin/expect -f
+set timeout 120
+
+spawn ssh -o StrictHostKeyChecking=no gaoduntao@100.121.107.1
+expect {
+    "*assword:*" { send "duoduo\r"; exp_continue }
+    "*denied*" { exit 1 }
+    "~" { send "cd /Users/gaoduntao/Workspace/nexis\r" }
+}
+
+expect "*nexis*"
+send "git pull origin main\r"
+
+expect "*nexis*"
+send "echo \"Pushing Prisma Schema to DB...\"\r"
+
+expect "*nexis*"
+send "docker exec -i nexis_agent_api npx prisma db push\r"
+
+expect "*nexis*"
+send "echo \"Restarting API containers to apply fresh code...\"\r"
+
+expect "*nexis*"
+send "docker restart nexis_agent_api nexis_rag_api nexis_worker\r"
+
+expect "*nexis*"
+send "echo \"Fetching docs...\"\r"
+
+expect "*nexis*"
+send "docs=\$(curl -s http://localhost:8001/documents | jq -r '.\\[\\].id')\r"
+
+expect "*nexis*"
+send "echo \"\$docs\" | xargs -I {} curl -s -X POST http://localhost:8001/documents/{}/re-ingest\r"
+
+expect "*nexis*"
+send "echo \"\nALL DONE\"\r"
+
+expect "*nexis*"
+send "exit\r"
+
+expect eof
