@@ -4,7 +4,10 @@ chromadb
 neo4j
 python-dotenv
 python-multipart
-google-generativeai
+google-genai
 redis
 jieba
 rank_bm25
+sqlalchemy
+psycopg2-binary
+openai

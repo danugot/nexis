@@ -129,15 +129,27 @@ async function getDocumentDetails(input: { id?: string; filename?: string; proje
 
 async function callLLM(prompt: string, provider: string): Promise<any> {
     try {
-        // Simplified to always use Qwen/OpenAI compatible via DashScope to keep code clean.
-        // Nexis backend is primarily Qwen based on earlier context.
         const completion = await openai.chat.completions.create({
             model: provider.includes('qwen') ? provider : "qwen-plus",
             messages: [{ role: "user", content: prompt }]
         });
         const text = completion.choices[0].message.content || "";
         const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        return JSON.parse(cleanText);
+        
+        try {
+            return JSON.parse(cleanText);
+        } catch (parseError) {
+            // Fallback: try to extract JSON array or object using regex if there's surrounding text
+            const match = cleanText.match(/(\{|\[)[\s\S]*(\}|\])/);
+            if (match) {
+                try {
+                    return JSON.parse(match[0]);
+                } catch (e2) {}
+            }
+            // If all parsing fails, return the raw text wrapped in an object so the tool doesn't crash
+            console.warn("LLM did not return strict JSON, wrapping raw text.");
+            return { rawOutput: text, error: "Failed to parse JSON", verdict: "ANALYZED", "summary": text };
+        }
     } catch (error: any) {
         console.error("LLM Call Failed:", error);
         throw error;

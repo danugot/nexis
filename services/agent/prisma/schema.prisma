@@ -34,26 +34,34 @@ model Message {
 }
 
 model Project {
-  id          String     @id @default(uuid())
-  name        String     @unique
-  description String?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id        String     @id @default(uuid())
+  name      String
+  version   String     @default("v1.0")
+  jiraId    String?
+  domainId  String?
+  status    String     @default("PROCESSING")
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  domain    Domain?    @relation(fields: [domainId], references: [id], onDelete: SetNull)
+  documents Document[]
 }
 
 model Document {
   id            String   @id @default(uuid())
   filename      String
   version       String   @default("v1.0")
+  projectName   String?
+  projectId     String?
   domainId      String?
   jiraId        String?
   status        String   @default("QUEUED") // QUEUED, PROCESSING, EFFECTIVE, NEEDS_REVIEW, ARCHIVED
   error_message String?
-  projectName   String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   domain        Domain?  @relation(fields: [domainId], references: [id], onDelete: SetNull)
+  project       Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }
 
 model TaxonomySuggestion {
@@ -73,6 +81,7 @@ model Domain {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
+  projects      Project[]
   taxonomyNodes TaxonomyNode[]
   documents     Document[]
 }

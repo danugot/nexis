@@ -19,8 +19,23 @@ class Domain(Base):
     createdAt = Column(DateTime, default=datetime.datetime.utcnow)
     updatedAt = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
     
-    documents = relationship("Document", back_populates="domain")
+    projects = relationship("Project", back_populates="domain")
     taxonomies = relationship("TaxonomyNode", back_populates="domain")
+
+class Project(Base):
+    __tablename__ = "Project"
+
+    id = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    version = Column(String, default="v1.0")
+    jiraId = Column(String, nullable=True)
+    domainId = Column(String, ForeignKey("Domain.id", ondelete="SET NULL"), nullable=True)
+    status = Column(String, default="PROCESSING") # DRAFT, PROCESSING, EFFECTIVE, ARCHIVED
+    createdAt = Column(DateTime, default=datetime.datetime.utcnow)
+    updatedAt = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    domain = relationship("Domain", back_populates="projects")
+    documents = relationship("Document", back_populates="project")
 
 class TaxonomyNode(Base):
     __tablename__ = "TaxonomyNode"
@@ -41,7 +56,8 @@ class Document(Base):
     id = Column(String, primary_key=True)
     filename = Column(String, nullable=False)
     version = Column(String, default="v1.0")
-    projectName = Column(String, nullable=True)
+    projectName = Column(String, nullable=True) # Deprecated slowly, keep for migration
+    projectId = Column(String, ForeignKey("Project.id", ondelete="CASCADE"), nullable=True)
     domainId = Column(String, ForeignKey("Domain.id", ondelete="SET NULL"), nullable=True)
     jiraId = Column(String, nullable=True)
     # QUEUED, PROCESSING, EFFECTIVE, NEEDS_REVIEW, ARCHIVED
@@ -50,7 +66,8 @@ class Document(Base):
     createdAt = Column(DateTime, default=datetime.datetime.utcnow)
     updatedAt = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
     
-    domain = relationship("Domain", back_populates="documents")
+    domain = relationship("Domain") # Let Domain mainly own Projects now
+    project = relationship("Project", back_populates="documents")
 
 class TaxonomySuggestion(Base):
     __tablename__ = "TaxonomySuggestion"

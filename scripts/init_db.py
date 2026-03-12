@@ -1,20 +1,17 @@
 import os
 import sys
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from python_services.db import engine, Base, SessionLocal, Domain
+# Add project root to path
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+from python_services.db import engine, Base
 
 def init_db():
+    print("Creating all tables in the database...")
     Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
-    default_domain = db.query(Domain).filter(Domain.name == "票据业务").first()
-    if not default_domain:
-        print("Creating default domain: 票据业务")
-        from uuid import uuid4
-        db.add(Domain(id=str(uuid4()), name="票据业务", description="Default bills domain"))
-        db.commit()
-    db.close()
-    print("DB initialized!")
+    print("Database initialization complete.")
 
 if __name__ == "__main__":
     init_db()

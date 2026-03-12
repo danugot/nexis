@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { Upload, Archive, RefreshCw, FileText, AlertTriangle } from 'lucide-react';
+import { Upload, Archive, RefreshCw, FileText, AlertTriangle, FolderOpen, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -37,6 +37,17 @@ interface DocumentRecord {
     errorMessage?: string;
     createdAt: string;
 }
+
+interface ProjectRecord {
+    id: string;
+    name: string;
+    version: string;
+    jiraId: string | null;
+    status: string;
+    createdAt: string;
+    documentCount: number;
+}
+
 export interface ConflictRecord {
     new_rule: string;
     old_rule: string;
@@ -50,10 +61,16 @@ export interface ConflictRecord {
 
 export default function KnowledgeBase() {
     const { activeDomain } = useGlobalDomain();
-    const [documents, setDocuments] = useState<DocumentRecord[]>([]);
+    const [projects, setProjects] = useState<ProjectRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [uploadOpen, setUploadOpen] = useState(false);
     const [uploading, setUploading] = useState(false);
+
+    // Project Documents View State
+    const [viewProjectOpen, setViewProjectOpen] = useState(false);
+    const [selectedProject, setSelectedProject] = useState<ProjectRecord | null>(null);
+    const [projectDocuments, setProjectDocuments] = useState<DocumentRecord[]>([]);
+    const [docsLoading, setDocsLoading] = useState(false);
 
     // Conflict Review State
     const [reviewOpen, setReviewOpen] = useState(false);
@@ -67,60 +84,97 @@ export default function KnowledgeBase() {
 
     const { register, handleSubmit, reset } = useForm();
 
-    const fetchDocuments = async () => {
+    const fetchProjects = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/documents`);
+            const url = activeDomain ? `${API_BASE_URL}/projects?domainId=${activeDomain.id}` : `${API_BASE_URL}/projects`;
+            const res = await fetch(url);
             const data = await res.json();
-            if (activeDomain) {
-                setDocuments(data.filter((d: any) => d.domainId === activeDomain.id));
-            } else {
-                setDocuments(data);
-            }
+            setProjects(data);
         } catch (error) {
-            console.error('Failed to fetch documents', error);
+            console.error('Failed to fetch projects', error);
         } finally {
             setLoading(false);
         }
     };
 
+    const fetchProjectDocuments = async (projectId: string) => {
+        setDocsLoading(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/projects/${projectId}/documents`);
+            const data = await res.json();
+            setProjectDocuments(data);
+        } catch (error) {
+            console.error('Failed to fetch project docs', error);
+        } finally {
+            setDocsLoading(false);
+        }
+    };
+
     useEffect(() => {
-        fetchDocuments();
+        fetchProjects();
     }, [activeDomain]);
 
     const handleUpload = async (data: any) => {
-        if (!data.file || data.file.length === 0) return;
+        if (!data.files || data.files.length === 0) return;
+        if (!data.projectName) {
+            alert("Project Name is mandatory to create a Knowledge Set.");
+            return;
+        }
 
         setUploading(true);
-        const formData = new FormData();
-        formData.append('file', data.file[0]);
-        if (activeDomain) formData.append('domainId', activeDomain.id);
-        if (data.projectName) formData.append('projectName', data.projectName);
-        if (data.jiraId) formData.append('jiraId', data.jiraId);
-        if (data.version) formData.append('version', data.version);
-
         try {
+            // 1. Create Project
+            const projRes = await fetch(`${API_BASE_URL}/projects`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: data.projectName,
+                    version: data.version,
+                    jiraId: data.jiraId,
+                    domainId: activeDomain?.id
+                })
+            });
+            const projData = await projRes.json();
+            if (projData.status !== 'success') throw new Error("Failed to create project");
+            const projectId = projData.id;
+
+            // 2. Upload multiple files bound to the project
+            const formData = new FormData();
+            formData.append('projectId', projectId);
+            if (activeDomain) formData.append('domainId', activeDomain.id);
+            formData.append('projectName', data.projectName);
+            formData.append('version', data.version);
+            if (data.jiraId) formData.append('jiraId', data.jiraId);
+
+            Array.from(data.files).forEach((file: any) => {
+                formData.append('files', file);
+            });
+
             await fetch(`${API_BASE_URL}/upload`, {
                 method: 'POST',
                 body: formData,
             });
+
             setUploadOpen(false);
             reset();
-            fetchDocuments();
+            fetchProjects();
         } catch (error) {
             console.error('Upload failed', error);
+            alert("Upload failed. Check console for details.");
         } finally {
             setUploading(false);
         }
     };
 
-    const handleArchive = async (id: string) => {
+    const handleArchiveDoc = async (id: string) => {
         if (!confirm('Are you sure you want to archive this document? It will no longer be used for AI responses.')) return;
         try {
             await fetch(`${API_BASE_URL}/documents/${id}/archive`, {
                 method: 'PUT',
             });
-            fetchDocuments();
+            if (selectedProject) fetchProjectDocuments(selectedProject.id);
+            fetchProjects(); // refresh doc count
         } catch (error) {
             console.error('Archive failed', error);
         }
@@ -160,9 +214,8 @@ export default function KnowledgeBase() {
                 if (data.remaining === 0) {
                     setReviewOpen(false);
                     setReviewFile(null);
-                    fetchDocuments();
+                    if (selectedProject) fetchProjectDocuments(selectedProject.id);
                 } else {
-                    // remove locally
                     setConflicts(prev => prev.filter(c => c !== conflict));
                 }
             }
@@ -173,15 +226,16 @@ export default function KnowledgeBase() {
         }
     };
 
-    const getStatusBadge = (doc: DocumentRecord) => {
-        switch (doc.status) {
+    const getStatusBadge = (status: string, errorMsg?: string) => {
+        switch (status) {
             case 'EFFECTIVE': return <Badge className="bg-emerald-500">Effective</Badge>;
             case 'NEEDS_REVIEW': return <Badge variant="destructive" className="flex items-center gap-1"><AlertTriangle size={12} /> Needs Review</Badge>;
             case 'PROCESSING': return <Badge variant="secondary" className="bg-amber-500 text-white">Processing</Badge>;
             case 'QUEUED': return <Badge variant="outline">Queued</Badge>;
+            case 'DRAFT': return <Badge variant="outline">Draft</Badge>;
             case 'ARCHIVED': return <Badge variant="secondary">Archived</Badge>;
-            case 'ERROR': return <Badge variant="destructive" title={doc.errorMessage || 'Unknown Error'} className="cursor-help flex items-center gap-1"><AlertTriangle size={12} /> Error</Badge>;
-            default: return <Badge variant="secondary">{doc.status}</Badge>;
+            case 'ERROR': return <Badge variant="destructive" title={errorMsg || 'Unknown Error'} className="cursor-help flex items-center gap-1"><AlertTriangle size={12} /> Error</Badge>;
+            default: return <Badge variant="secondary">{status}</Badge>;
         }
     };
 
@@ -189,33 +243,33 @@ export default function KnowledgeBase() {
         <div className="p-8 max-w-7xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Knowledge Base</h1>
-                    <p className="text-muted-foreground mt-1">Manage documents, versions, and validation statuses.</p>
+                    <h1 className="text-3xl font-bold tracking-tight">Project Knowledge Sets</h1>
+                    <p className="text-muted-foreground mt-1">Manage project containers grouping multiple requirements and specification documents.</p>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="outline" size="icon" onClick={fetchDocuments} disabled={loading}>
+                    <Button variant="outline" size="icon" onClick={fetchProjects} disabled={loading}>
                         <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                     </Button>
 
                     <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
                         <DialogTrigger asChild>
-                            <Button className="gap-2">
-                                <Upload size={16} /> Upload Document
+                            <Button className="gap-2 bg-indigo-600 hover:bg-indigo-700">
+                                <Upload size={16} /> Create Project & Upload Files
                             </Button>
                         </DialogTrigger>
                         <DialogContent>
                             <DialogHeader>
-                                <DialogTitle>Upload New Knowledge</DialogTitle>
+                                <DialogTitle>New Knowledge Set (Project)</DialogTitle>
                                 <DialogDescription>
-                                    Upload specifications or requirements to integrate into the intelligent graph.
+                                    Create a project container and upload all related specification files (PRD, API docs, schemas) at once.
                                 </DialogDescription>
                             </DialogHeader>
                             <form onSubmit={handleSubmit(handleUpload)} className="space-y-4 pt-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="file">File (Markdown, Docx, PDF)</Label>
-                                    <Input id="file" type="file" {...register('file', { required: true })} />
-                                </div>
                                 <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2 col-span-2">
+                                        <Label htmlFor="projectName">Project Name (Bundle Identifier)</Label>
+                                        <Input id="projectName" placeholder="e.g. 票据融合一期" {...register('projectName', { required: true })} />
+                                    </div>
                                     <div className="space-y-2">
                                         <Label htmlFor="version">Version</Label>
                                         <Input id="version" defaultValue="v1.0" {...register('version')} />
@@ -224,23 +278,22 @@ export default function KnowledgeBase() {
                                         <Label htmlFor="jiraId">JIRA ID (Optional)</Label>
                                         <Input id="jiraId" placeholder="e.g. NEXIS-101" {...register('jiraId')} />
                                     </div>
-                                    <div className="space-y-2 col-span-2">
-                                        <Label htmlFor="projectName">Project Name / Alias (MANDATORY IF SPECIFIC)</Label>
-                                        <Input id="projectName" placeholder="e.g. 票据融合一期" {...register('projectName')} />
-                                        <p className="text-[10px] text-muted-foreground mt-1">If set, AI will securely isolate and retrieve facts for this exact project name.</p>
-                                    </div>
+                                </div>
+                                <div className="space-y-2 border-t pt-4">
+                                    <Label htmlFor="files">Select Files (Markdown, Docx, PDF, etc.)</Label>
+                                    <Input id="files" type="file" multiple {...register('files', { required: true })} />
+                                    <p className="text-xs text-muted-foreground">You can select multiple files at once using Shift or Ctrl/Cmd.</p>
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Target Domain</Label>
                                     <div className="text-sm font-medium bg-slate-50 border px-3 py-2 rounded-md">
                                         {activeDomain ? activeDomain.name : 'Unknown Domain'}
                                     </div>
-                                    <p className="text-[10px] text-muted-foreground">To upload to a different domain, please change it in the left sidebar.</p>
                                 </div>
                                 <div className="pt-4 flex justify-end gap-2">
                                     <Button type="button" variant="outline" onClick={() => setUploadOpen(false)}>Cancel</Button>
                                     <Button type="submit" disabled={uploading}>
-                                        {uploading ? 'Uploading...' : 'Ingest Document'}
+                                        {uploading ? 'Creating & Uploading...' : 'Submit Knowledge Set'}
                                     </Button>
                                 </div>
                             </form>
@@ -249,65 +302,57 @@ export default function KnowledgeBase() {
                 </div>
             </div>
 
-            <div className="border rounded-lg bg-card">
+            <div className="border rounded-lg bg-card overflow-hidden">
                 <Table>
-                    <TableHeader>
+                    <TableHeader className="bg-slate-50 dark:bg-slate-900/50">
                         <TableRow>
-                            <TableHead>Filename</TableHead>
+                            <TableHead>Project Name</TableHead>
                             <TableHead>Version</TableHead>
-                            <TableHead>Project</TableHead>
                             <TableHead>Jira ID</TableHead>
+                            <TableHead>Documents</TableHead>
                             <TableHead>Status</TableHead>
-                            <TableHead>Uploaded At</TableHead>
+                            <TableHead>Created At</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {documents.length === 0 ? (
+                        {projects.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                                    No documents found. Upload one to get started.
+                                <TableCell colSpan={7} className="text-center text-muted-foreground py-12">
+                                    <div className="flex flex-col items-center justify-center space-y-3">
+                                        <Layers size={32} className="text-slate-300" />
+                                        <p>No project knowledge sets found. Create one to get started.</p>
+                                    </div>
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            documents.map((doc) => (
-                                <TableRow key={doc.id}>
+                            projects.map((proj) => (
+                                <TableRow key={proj.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                                     <TableCell className="font-medium flex items-center gap-2">
-                                        <FileText size={16} className="text-slate-400" />
-                                        {doc.filename}
+                                        <FolderOpen size={16} className="text-indigo-400" />
+                                        {proj.name}
                                     </TableCell>
-                                    <TableCell>{doc.version}</TableCell>
-                                    <TableCell>{doc.projectName || '-'}</TableCell>
-                                    <TableCell>{doc.jiraId || '-'}</TableCell>
-                                    <TableCell>{getStatusBadge(doc)}</TableCell>
-                                    <TableCell>{new Date(doc.createdAt).toLocaleDateString()}</TableCell>
+                                    <TableCell>{proj.version}</TableCell>
+                                    <TableCell>{proj.jiraId || '-'}</TableCell>
+                                    <TableCell>
+                                        <Badge variant="secondary" className="font-mono">
+                                            {proj.documentCount} files
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell>{getStatusBadge(proj.status)}</TableCell>
+                                    <TableCell>{new Date(proj.createdAt).toLocaleDateString()}</TableCell>
                                     <TableCell className="text-right">
-                                        {doc.status === 'NEEDS_REVIEW' && (
-                                            <Button
-                                                variant="destructive"
-                                                size="sm"
-                                                className="mr-2"
-                                                onClick={() => openReview(doc.filename)}
-                                            >
-                                                Review Conflicts
-                                            </Button>
-                                        )}
                                         <Button
-                                            variant="ghost"
+                                            variant="secondary"
                                             size="sm"
-                                            onClick={() => { setTraceDoc(doc); setTraceOpen(true); }}
-                                            className="text-slate-500 hover:text-indigo-600 mr-2"
-                                            title="View Processing Trace"
+                                            onClick={() => {
+                                                setSelectedProject(proj);
+                                                fetchProjectDocuments(proj.id);
+                                                setViewProjectOpen(true);
+                                            }}
+                                            className="text-xs mr-2"
                                         >
-                                            <FileText size={16} />
-                                        </Button>
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => handleArchive(doc.id)}
-                                            className="text-slate-500 hover:text-red-500"
-                                        >
-                                            <Archive size={16} />
+                                            View Content
                                         </Button>
                                     </TableCell>
                                 </TableRow>
@@ -316,6 +361,86 @@ export default function KnowledgeBase() {
                     </TableBody>
                 </Table>
             </div>
+
+            {/* Project Documents Dialog */}
+            <Dialog open={viewProjectOpen} onOpenChange={setViewProjectOpen}>
+                <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <FolderOpen size={18} className="text-indigo-500" />
+                            {selectedProject?.name} <span className="text-muted-foreground font-normal text-sm">({selectedProject?.version})</span>
+                        </DialogTitle>
+                        <DialogDescription>
+                            Documents bounded to this project knowledge set.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="flex-1 overflow-y-auto mt-4 border rounded-md">
+                        <Table>
+                            <TableHeader className="bg-slate-50 sticky top-0 z-10">
+                                <TableRow>
+                                    <TableHead>Filename</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Uploaded At</TableHead>
+                                    <TableHead className="text-right">Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {docsLoading ? (
+                                    <TableRow>
+                                        <TableCell colSpan={4} className="text-center py-8 text-muted-foreground animate-pulse">Loading documents...</TableCell>
+                                    </TableRow>
+                                ) : projectDocuments.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No active documents in this project.</TableCell>
+                                    </TableRow>
+                                ) : (
+                                    projectDocuments.map((doc) => (
+                                        <TableRow key={doc.id}>
+                                            <TableCell className="font-medium flex items-center gap-2 shrink-0 max-w-[300px] truncate" title={doc.filename}>
+                                                <FileText size={16} className="text-slate-400 shrink-0" />
+                                                <span className="truncate">{doc.filename}</span>
+                                            </TableCell>
+                                            <TableCell>{getStatusBadge(doc.status, doc.errorMessage)}</TableCell>
+                                            <TableCell className="text-muted-foreground text-sm">{new Date(doc.createdAt).toLocaleDateString()}</TableCell>
+                                            <TableCell className="text-right">
+                                                {doc.status === 'NEEDS_REVIEW' && (
+                                                    <Button
+                                                        variant="destructive"
+                                                        size="sm"
+                                                        className="mr-2"
+                                                        onClick={() => openReview(doc.filename)}
+                                                    >
+                                                        Review Conflicts
+                                                    </Button>
+                                                )}
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => { setTraceDoc(doc as any); setTraceOpen(true); }}
+                                                    className="text-slate-500 hover:text-indigo-600 mr-2"
+                                                    title="View Processing Trace"
+                                                >
+                                                    <FileText size={16} />
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleArchiveDoc(doc.id)}
+                                                    className="text-slate-500 hover:text-red-500"
+                                                    title="Archive from AI"
+                                                >
+                                                    <Archive size={16} />
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             {/* Conflict Review Dialog */}
             <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
@@ -405,7 +530,7 @@ export default function KnowledgeBase() {
             <DocumentTraceSheet
                 isOpen={traceOpen}
                 onClose={() => { setTraceOpen(false); setTraceDoc(null); }}
-                document={traceDoc}
+                document={traceDoc as any}
             />
         </div>
     );

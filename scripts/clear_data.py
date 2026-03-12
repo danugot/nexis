@@ -21,7 +21,7 @@ try:
     cur.execute('DELETE FROM "Document";')
     cur.execute('DELETE FROM "Message";')
     cur.execute('DELETE FROM "Session";')
-    # cur.execute('DELETE FROM "Project";') # optional if legacy
+    cur.execute('DELETE FROM "Project";')
     conn.commit()
     print("✅ PostgreSQL cleansed.")
 except Exception as e:

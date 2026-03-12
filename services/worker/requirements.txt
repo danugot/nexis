@@ -6,3 +6,8 @@ google-genai
 python-dotenv
 markitdown[all]
 PyYAML
+sqlalchemy
+psycopg2-binary
+docx2txt
+PyPDF2
+openai

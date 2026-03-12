@@ -4,13 +4,15 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y gcc g++ libpq-dev && rm -rf /var/lib/apt/lists/*
 
-COPY requirements-all.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+COPY services/worker/requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 # Copy necessary directories
 COPY python_services /app/python_services
 COPY services/worker /app/services/worker
 
 ENV PYTHONPATH=/app
+ENV PYTHONUTF8=1
+ENV LANG=C.UTF-8
 
-CMD ["python", "-u", "services/worker/main.py"]
+CMD ["python", "services/worker/main.py"]

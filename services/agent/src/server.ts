@@ -87,7 +87,8 @@ const ingestTools: FunctionDeclaration[] = [
 // --- Express Server ---
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const PORT = 8002;
 
@@ -217,6 +218,12 @@ app.post('/chat', async (req, res) => {
         return res.status(400).json({ error: 'Query and sessionId are required.' });
     }
 
+    // Guard: verify session exists before any DB writes
+    const sessionExists = await prisma.session.findUnique({ where: { id: sessionId } });
+    if (!sessionExists) {
+        return res.status(404).json({ error: `Session '${sessionId}' not found. Please create a session first.` });
+    }
+
     // Load actual history from DB
     const dbMessages = await prisma.message.findMany({
         where: { sessionId },
@@ -301,10 +308,12 @@ ${recentHistory}
 User Query: "${query}"
 
 RULES:
-1. "rewritten_query": Resolve pronouns and vague context (e.g., "继续" -> "继续按上文流程分析"). MUST BE IN CHINESE. MUST BE EXTREMELY CONCISE (under 15 words). Do NOT translate to English. Do NOT add complex system instructions. If the query is already clear, return it EXACTLY as is.
+1. "rewritten_query": Resolve pronouns and vague context. MUST BE IN CHINESE. MUST BE EXTREMELY CONCISE (under 15 words). Do NOT translate.
 2. "trigger_tool": ONLY set to true if the User is EXPLICITLY agreeing to use a tool that the Assistant JUST suggested in the history.
 3. "tool_intent": If triggering a tool, provide a CONCISE description in Chinese.
-4. "is_informational_query": Set to TRUE if the user is asking a straightforward informational question (e.g., "有哪些错误码", "流程是什么", "分析发生的原因等客观知识抽取"). Set to FALSE ONLY if the user is asking to simulate changes, trace dependencies in codebase/DB, or draft documents (e.g., "如果要增加人脸识别", "生成PRD"). WHEN IN DOUBT, SET TO TRUE.
+4. "is_informational_query": CRITICAL METRIC! 
+   - Set to TRUE ONLY if asking for basic facts, direct rules, process lists, or simple error codes (e.g. "流程是什么", "有哪些规则").
+   - Set to FALSE if the query requires DEEP THINKING, such as: gap analysis, missing edge cases, feasibility simulations, blast radius impact, evaluating design, or drafting documents (e.g. "分析一下有没有缺失的边界条件", "生成PRD", "如果要增加某个字段有什么影响").
 
 Return ONLY valid JSON (no markdown):
 {
@@ -440,6 +449,8 @@ ${autoContext}
 
             if (isInformationalQuery && !forceToolTrigger) {
                 contextualSystemPrompt += `\n\n**ANTI-HALLUCINATION DIRECTIVE**: You are answering a simple informational query. DO NOT offer, suggest, or attempt to use tools like \`requirement_analyzer\`, \`dependency_impact_analyzer\`, or \`draft_prd\` in your response footer, even if you did so previously in this chat history. DO NOT output "下一步行动建议" or act as an architect. Just provide the direct answer.`;
+            } else if (!isInformationalQuery) {
+                contextualSystemPrompt += `\n\n**CRITICAL TOOL DIRECTIVE**: This is a COMPLEX analysis request. You MUST NOT try to answer this directly. You MUST call one of the provided analysis tools (e.g. \`requirement_analyzer\` or \`dependency_impact_analyzer\`). Choose the most appropriate tool and execute it IMMEDIATELY.`;
             }
 
             const messages: any[] = [
@@ -454,6 +465,7 @@ ${autoContext}
             let loopCount = 0;
             while (loopCount < 8) {
                 loopCount++;
+                console.log(`[Qwen Loop ${loopCount}] calling completion...`);
                 let completion: any;
                 try {
                     completion = await openai.chat.completions.create({
@@ -471,13 +483,17 @@ ${autoContext}
                 const msg = completion.choices[0].message;
                 messages.push(msg);
 
+                console.log(`[Qwen Loop ${loopCount}] response received. tool_calls:`, msg.tool_calls ? msg.tool_calls.length : 0);
+
                 if (!msg.tool_calls || msg.tool_calls.length === 0) {
+                    console.log(`[Qwen Loop ${loopCount}] No tool calls, exiting loop.`);
                     finalText = msg.content || "";
                     break;
                 }
 
                 for (const call of msg.tool_calls) {
                     const fcall = (call as any).function;
+
                     const name = fcall.name;
                     let args: any = {};
                     try {
@@ -518,6 +534,18 @@ ${autoContext}
                             toolResult = await draftPrd({ ...args, projectName });
                         } else if (name === "requirement_analyzer") {
                             toolResult = await requirementAnalyzer({ ...args, projectName }, domainId);
+                            // Persist architect_report in Qwen path (mirrors Gemini path behaviour)
+                            if (toolResult && toolResult.verdict === "ANALYZED") {
+                                console.log(`[Server] Persisting Architect Report (Qwen) for session ${sessionId}`);
+                                await prisma.message.create({
+                                    data: {
+                                        sessionId,
+                                        role: 'tool',
+                                        content: JSON.stringify({ type: 'architect_report', data: toolResult }),
+                                        createdAt: new Date()
+                                    }
+                                }).catch(e => console.error('Failed to persist architect_report:', e));
+                            }
                         } else if (name === "get_document_content") {
                             toolResult = await getDocumentContent(args.fileId);
                         } else {
@@ -530,15 +558,21 @@ ${autoContext}
                     }
 
                     let llmContextResult = toolResult;
-                    if (name === "draft_prd" && toolResult.prd_markdown) {
+                    if (name === "draft_prd" && toolResult?.prd_markdown) {
                         llmContextResult = { status: "success", message: "PRD Generation Complete. The document has been presented to the user directly, do not rewrite the PRD yourself." };
+                    }
+                    
+                    // Qwen/OpenAI requires tool response content to strictly be a string and not empty.
+                    let finalContent = typeof llmContextResult === 'object' ? JSON.stringify(llmContextResult) : String(llmContextResult);
+                    if (!finalContent || finalContent === '{}' || finalContent.trim() === '') {
+                        finalContent = '{"status": "success", "message": "Tool executed successfully with no explicit return data."}';
                     }
 
                     messages.push({
                         role: "tool",
                         tool_call_id: call.id,
                         name: name,
-                        content: JSON.stringify(llmContextResult)
+                        content: finalContent
                     });
                 }
             }
@@ -546,7 +580,7 @@ ${autoContext}
         } else {
             // -- GEMINI NATIVE EXECUTION --
             const model = genAI.getGenerativeModel({
-                model: "gemini-3-flash-preview",
+                model: modelTag,  // Use dynamic model from Redis settings
                 tools: [{ functionDeclarations: finalChatTools }],
             });
 
@@ -709,6 +743,41 @@ ${autoContext}
     res.end();
 });
 
+// --- LLM TEXT COMPLETION (used by worker Phase 1 for full-doc module inference) ---
+app.post('/llm-complete', async (req, res) => {
+    const { prompt, provider, max_tokens } = req.body;
+    if (!prompt) return res.status(400).json({ error: 'prompt is required' });
+
+    const modelTag = provider || 'qwen-plus';
+    const maxTok = max_tokens || 1024;
+
+    try {
+        if (modelTag.toLowerCase().includes('qwen') || modelTag.toLowerCase().includes('gpt')) {
+            const openai = new OpenAI({
+                apiKey: process.env.DASHSCOPE_API_KEY,
+                baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+            });
+            const completion = await openai.chat.completions.create({
+                model: modelTag,
+                messages: [{ role: 'user', content: prompt }],
+                max_tokens: maxTok,
+            });
+            const text = completion.choices[0]?.message?.content || '';
+            return res.json({ text });
+        } else {
+            // Gemini path
+            const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+            const model = genAI.getGenerativeModel({ model: modelTag });
+            const result = await model.generateContent(prompt);
+            const text = result.response.text();
+            return res.json({ text });
+        }
+    } catch (e: any) {
+        console.error('[llm-complete] Error:', e.message);
+        return res.status(500).json({ error: e.message });
+    }
+});
+
 // --- PI-INSPIRED INGESTION AGENT ---
 app.post('/ingest-chunk', async (req, res) => {
     const { text, domainId, source, projectName, provider } = req.body;
@@ -719,12 +788,31 @@ app.post('/ingest-chunk', async (req, res) => {
     }
 
     try {
-        const systemPrompt = `You are a Minimal Ingestion Agent. Your task is to process the following raw text chunk and integrate its core entities into the Neo4j knowledge graph according to the overarching Taxonomy.
-Rules:
-1. You MUST first use the 'get_taxonomy' tool to understand the valid categories for this domain. This tool returns absolute hierarchical paths (e.g., 'Root > Parent > Child').
-2. If the text clearly belongs to an existing category, extract the entities and relationships, and use the 'write_subgraph' tool to link them to that specific category.
-3. If the text introduces novel concepts that DO NOT remotely fit existing taxonomy categories, you MUST use the 'propose_new_category' tool to formally request a new category, which returns a suggestionId. Then use 'write_subgraph' to link your extracted entities to that suggestionId.
-4. IMPORTANT: Any proposed category path MUST be an absolute path starting from an existing ROOT category (e.g., '票据业务 > 新分类'). DO NOT propose a partial path without its parent roots.
+        const systemPrompt = `You are a Knowledge Graph Ingestion Agent. Your ONLY goal is to extract entities from the raw text and write them into the Neo4j knowledge graph.
+
+MANDATORY WORKFLOW (you MUST follow ALL steps):
+STEP 1: Call 'knowledge_orchestrator' with action="get_taxonomy" to fetch the domain's existing category tree.
+
+STEP 2 (CRITICAL - you MUST always do this):
+- If the taxonomy has matching categories: pick the best matching categoryId, then call 'knowledge_orchestrator' with action="write_subgraph" using that categoryId.
+- If the taxonomy is EMPTY or has NO matching category: first call action="propose_category" to get a suggestionId, then IMMEDIATELY call action="write_subgraph" using that suggestionId.
+
+IMPORTANT RULES FOR ENTITY EXTRACTION (9 allowed types only):
+- Role: business roles/actors
+- System: IT systems, apps, backends
+- UIPage: named UI screens/pages
+- BusinessRule: conditions, constraints, validation rules (MUST extract when you see "当...时", "若...则", amount limits, state transitions, field validations)
+- BusinessState: workflow states
+- DataEntity: data fields/objects
+- API: interface names
+- BusinessConcept: domain abstractions
+- Action: operations/processes
+DO NOT invent types outside these 9. At minimum extract 3-5 entities per call.
+
+IMPORTANT RULES FOR propose_category:
+- proposedPath MUST be a meaningful business domain concept (e.g., "信贷管理 > 产品管理")
+- NEVER use document filenames, project names, or version numbers as a path (e.g., "云贷项目 > 一期建设" is WRONG)
+- NEVER use org chart paths or approval chains
 
 Raw Text Chunk:
 ${text}
@@ -796,11 +884,13 @@ ${text}
                             console.log(`[Ingestion Agent] Successfully repaired truncated JSON.`);
                         }
 
-                        if (fcall.name === 'get_taxonomy' || fcall.name === 'propose_new_category' || fcall.name === 'write_subgraph') {
-                            const action = fcall.name;
-                            toolResult = await knowledgeOrchestrator({ action, ...args, domainId, sourceDocument: source, status: req.body.status || 'EFFECTIVE', projectName, extractedBy: modelTag });
+                        if (fcall.name === 'knowledge_orchestrator') {
+                            console.log(`[Ingestion Agent - Qwen] knowledge_orchestrator action=${args.action}, categoryId=${args.categoryId}, entities=${args.entities?.length}`);
+                            toolResult = await knowledgeOrchestrator({ ...args, domainId, sourceDocument: source, status: req.body.status || 'EFFECTIVE', projectName, extractedBy: modelTag });
+                            console.log(`[Ingestion Agent - Qwen] knowledge_orchestrator result:`, JSON.stringify(toolResult).substring(0, 200));
                         } else {
-                            toolResult = { error: `Unknown tool for ingestion: ${fcall.name}` };
+                            console.warn(`[Ingestion Agent - Qwen] Unknown tool called: ${fcall.name}`);
+                            toolResult = { error: `Unknown tool for ingestion: ${fcall.name}. You must call 'knowledge_orchestrator'.` };
                         }
                     } catch (parseError: any) {
                         console.error(`[Ingestion Agent] Tool argument parse error:`, parseError);
@@ -841,9 +931,9 @@ ${text}
                     let toolResult: any = {};
                     try {
                         const args = call.args as any;
-                        if (call.name === 'get_taxonomy' || call.name === 'propose_new_category' || call.name === 'write_subgraph') {
-                            const action = call.name;
-                            toolResult = await knowledgeOrchestrator({ action, ...args, domainId, sourceDocument: source, status: req.body.status || 'EFFECTIVE', projectName, extractedBy: modelTag });
+                        if (call.name === 'knowledge_orchestrator') {
+                            console.log(`[Ingestion Agent - Gemini] knowledge_orchestrator action=${args.action}`);
+                            toolResult = await knowledgeOrchestrator({ ...args, domainId, sourceDocument: source, status: req.body.status || 'EFFECTIVE', projectName, extractedBy: modelTag });
                         } else {
                             toolResult = { error: `Unknown tool for ingestion: ${call.name}` };
                         }

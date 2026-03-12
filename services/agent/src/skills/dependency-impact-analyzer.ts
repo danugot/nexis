@@ -103,7 +103,21 @@ async function callLLM(prompt: string, provider: string): Promise<any> {
         });
         const text = completion.choices[0].message.content || "";
         const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        return JSON.parse(cleanText);
+        
+        try {
+            return JSON.parse(cleanText);
+        } catch (parseError) {
+            // Fallback: try to extract JSON array or object using regex if there's surrounding text
+            const match = cleanText.match(/(\{|\[)[\s\S]*(\}|\])/);
+            if (match) {
+                try {
+                    return JSON.parse(match[0]);
+                } catch (e2) {}
+            }
+            // If all parsing fails, return the raw text wrapped in an object so the tool doesn't crash
+            console.warn("LLM did not return strict JSON, wrapping raw text.");
+            return { rawOutput: text, error: "Failed to parse strict JSON", summary: text };
+        }
     } catch (error: any) {
         console.error("LLM Call Failed:", error);
         throw error;

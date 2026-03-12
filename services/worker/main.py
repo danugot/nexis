@@ -117,69 +117,80 @@ else:
     client = None
     print("Warning: GEMINI_API_KEY not set")
 
-# Custom extractor replacing markitdown for python 3.9 compatibility
+# markitdown is installed and works on Python 3.11 — converts docx/pdf to proper Markdown
+# preserving heading styles (H1/H2/H3) as # markers so semantic_chunking works correctly.
 def extract_text(file_path):
-    ext = os.path.splitext(file_path)[1].lower()
-    if ext == '.docx':
-        return docx2txt.process(file_path)
-    elif ext == '.pdf':
-        text = ""
-        with open(file_path, 'rb') as f:
-            reader = PyPDF2.PdfReader(f)
-            for page in reader.pages:
-                text += page.extract_text() + "\n"
-        return text
-    else:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            return f.read()
+    try:
+        from markitdown import MarkItDown
+        md = MarkItDown()
+        result = md.convert(file_path)
+        return result.text_content
+    except Exception as e:
+        print(f"[extract_text] markitdown failed ({e}), falling back to raw extractor")
+        ext = os.path.splitext(file_path)[1].lower()
+        if ext == '.docx':
+            return docx2txt.process(file_path)
+        elif ext == '.pdf':
+            text = ""
+            with open(file_path, 'rb') as f:
+                reader = PyPDF2.PdfReader(f)
+                for page in reader.pages:
+                    text += page.extract_text() + "\n"
+            return text
+        else:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return f.read()
+
 
 def semantic_chunking(markdown_text, max_chunk_size=1000):
     """
-    Intelligent split focusing on hierarchy retention:
-    1. Tracks current markdown tree (H1 > H2 > H3).
-    2. Injects the contextual tree into the beginning of every chunk.
-    3. If a section is too large, split by paragraphs.
+    Intelligent split with automatic strategy selection:
+    - If the document has Markdown headers (≥5), use header-aware chunking
+      (preserves H1>H2>H3 hierarchy, injects context path into every chunk).
+    - If the document has few/no headers (visual-only formatting like bold+fontsize),
+      fall back to paragraph-based chunking to avoid fixed-size character cutting.
     """
+    # Auto-detect document structure
+    header_count = len(re.findall(r'^#{1,6} ', markdown_text, flags=re.MULTILINE))
+
+    if header_count < 5:
+        # FALLBACK: paragraph-based chunking for documents without Word heading styles
+        print(f"[semantic_chunking] Only {header_count} Markdown headers detected — using paragraph fallback strategy")
+        return _paragraph_chunking(markdown_text, max_chunk_size)
+
+    # STANDARD: header-aware chunking for properly structured documents
     chunks = []
-    # Match headers keeping the text
     parts = re.split(r'(^#{1,6} .*$)', markdown_text, flags=re.MULTILINE)
-    
+
     current_chunk = ""
     header_stack = []
 
     def get_context_path():
         if not header_stack: return ""
-        # Clean paths: Remove '#' characters
         clean_paths = [h.lstrip('#').strip() for level, h in header_stack]
         return f"[Context: {' > '.join(clean_paths)}]\n\n"
 
     for part in parts:
         if not part.strip():
             continue
-            
+
         header_match = re.match(r'^(#{1,6}) (.*)$', part.strip())
         if header_match:
-            # Flush existing chunk
             if current_chunk:
                 chunks.append(current_chunk.strip())
-            
+
             level = len(header_match.group(1))
             header_text = part.strip()
-            
-            # Pop headers greater or equal to current level
+
             while header_stack and header_stack[-1][0] >= level:
                 header_stack.pop()
-                
+
             header_stack.append((level, header_text))
-            
-            # Start new context
             current_chunk = get_context_path() + header_text + "\n"
         else:
-            # Content part
             if len(current_chunk) + len(part) <= max_chunk_size:
                 current_chunk += part
             else:
-                # Content too large, split by paragraphs
                 paragraphs = part.split('\n\n')
                 for para in paragraphs:
                     if not para.strip():
@@ -187,18 +198,112 @@ def semantic_chunking(markdown_text, max_chunk_size=1000):
                     if len(current_chunk) + len(para) <= max_chunk_size:
                         current_chunk += para + "\n\n"
                     else:
-                        # Flush
                         if current_chunk.strip():
                             chunks.append(current_chunk.strip())
-                        # Re-inject context for split chunks
                         current_chunk = get_context_path() + para + "\n\n"
-    
+
     if current_chunk.strip():
         chunks.append(current_chunk.strip())
-        
+
     return chunks
 
-def ingest_to_vector_db(filename, content, domain_id=None, project_name=None, status="EFFECTIVE"):
+
+def _paragraph_chunking(text, max_chunk_size=700):
+    """
+    Fallback chunker for documents without Markdown headers.
+    Splits on paragraph boundaries (\n\n or \n followed by numbering/bullet),
+    then merges short paragraphs together up to max_chunk_size.
+    """
+    # Split on double newlines or lines starting with Chinese numbering / bullets
+    raw_paras = re.split(r'\n{2,}|(?=\n[一二三四五六七八九十\d]+[、。\.）)]\s)', text)
+
+    chunks = []
+    current = ""
+
+    for para in raw_paras:
+        para = para.strip()
+        if not para:
+            continue
+        # Skip pure table-of-content lines (number + dots + page number)
+        if re.match(r'^.{1,40}\.{3,}\s*\d+$', para):
+            continue
+        # Skip very short noise lines (single field labels without content)
+        if len(para) < 10:
+            continue
+
+        if len(current) + len(para) + 2 <= max_chunk_size:
+            current = (current + "\n\n" + para).strip()
+        else:
+            if current:
+                chunks.append(current)
+            # If a single paragraph is larger than max, split by sentences
+            if len(para) > max_chunk_size:
+                sentences = re.split(r'(?<=[。！？；])', para)
+                sub = ""
+                for sent in sentences:
+                    if len(sub) + len(sent) <= max_chunk_size:
+                        sub += sent
+                    else:
+                        if sub:
+                            chunks.append(sub.strip())
+                        sub = sent
+                if sub:
+                    chunks.append(sub.strip())
+                current = ""
+            else:
+                current = para
+
+    if current:
+        chunks.append(current)
+
+    return chunks
+
+
+def clean_document_noise(text: str) -> str:
+    """
+    Remove common noise from Chinese business requirement docs before vector embedding.
+    Strips out version control tables, metadata headers, and Table of Contents.
+    """
+    lines = text.split('\n')
+    cleaned_lines = []
+    skip_mode = None
+    
+    for line in lines:
+        stripped = line.strip()
+        
+        if skip_mode is None:
+            if re.match(r'^(修订记录|版本记录|版本控制|文档说明|变更历史)$', stripped) or \
+               ('文档及版本' in stripped) or ('文档控制' in stripped):
+                skip_mode = 'version_table'
+                continue
+            elif re.match(r'^目\s*录$', stripped) or re.match(r'^Table of Contents$', stripped, re.IGNORECASE):
+                skip_mode = 'toc'
+                continue
+                
+        if skip_mode == 'version_table':
+            # Exit when reaching TOC or first real section
+            if re.match(r'^目\s*录$', stripped) or re.match(r'^(1\.|第[一二三]章|1\s|一、)', stripped):
+                skip_mode = None
+                # If it's TOC, enter TOC mode instead
+                if re.match(r'^目\s*录$', stripped):
+                    skip_mode = 'toc'
+                    continue
+            else:
+                continue
+                
+        if skip_mode == 'toc':
+            # Exit TOC when reaching first real section without trailing page numbers
+            if re.match(r'^(1\.|第[一二三]章|1\s|一、)', stripped) and not re.search(r'\d+$', stripped):
+                skip_mode = None
+            else:
+                continue
+                
+        if skip_mode is None:
+            cleaned_lines.append(line)
+            
+    return '\n'.join(cleaned_lines)
+
+def ingest_to_vector_db(filename, content, domain_id=None, project_name=None, project_id=None, status="EFFECTIVE"):
     """
     Ingests text content into ChromaDB using semantic chunking.
     """
@@ -221,8 +326,11 @@ def ingest_to_vector_db(filename, content, domain_id=None, project_name=None, st
     if not chroma_collection:
         return
     try:
-        # Use semantic chunking
-        chunks = semantic_chunking(content)
+        # Pre-process content to remove noise (TOC, version history)
+        cleaned_content = clean_document_noise(content)
+        
+        # Use semantic chunking with finer granularity (1000 -> 700)
+        chunks = semantic_chunking(cleaned_content, max_chunk_size=700)
         
         ids = [f"{filename}_{i}" for i in range(len(chunks))]
         metadatas = []
@@ -230,12 +338,14 @@ def ingest_to_vector_db(filename, content, domain_id=None, project_name=None, st
             meta = {"source": filename, "chunk_index": i, "status": status}
             if project_name:
                 meta["projectName"] = project_name
+            if project_id:
+                meta["projectId"] = project_id
             metadatas.append(meta)
         
         if chunks:
             print(f"[DIAGNOSTIC] Prepared {len(chunks)} chunks for {filename}. First chunk peek: {chunks[0][:50]}...")
             chroma_collection.add(documents=chunks, metadatas=metadatas, ids=ids)
-            print(f"[DIAGNOSTIC] Ingestion successful. New Count: {chroma_collection.count()}")
+            print(f"[DIAGNOSTIC] Vector Ingestion successful. New Count: {chroma_collection.count()}")
     except Exception as e:
         print(f"Error ingesting to ChromaDB: {e}")
 
@@ -290,7 +400,8 @@ def extract_and_ingest_graph(filename, content, domain_id=None, project_name=Non
         taxonomy_content = "No specific taxonomy defined for this domain. Please infer categories."
 
     # Use semantic chunking for context-aware extraction windows
-    semantic_chunks = semantic_chunking(content, max_chunk_size=1000)
+    # Reduced from 1000 to 700 for finer Chinese document granularity
+    semantic_chunks = semantic_chunking(content, max_chunk_size=700)
     
     # Group chunks into larger extraction windows of roughly 4000 characters
     extraction_batches = []
@@ -321,42 +432,109 @@ def extract_and_ingest_graph(filename, content, domain_id=None, project_name=Non
 
     print(f"Extraction pipeline primed for {total_batches} batches via ThreadPool with engine {llm_provider}.")
 
+    # =====================================================================
+    # PHASE 1: Full-Document Module Inference
+    # Send the entire document to LLM to infer a unified module taxonomy.
+    # This eliminates cross-chunk module fragmentation.
+    # =====================================================================
+    doc_inferred_taxonomy = taxonomy_content  # fallback: use existing taxonomy
+
+    try:
+        import requests as _requests
+        print(f"[Phase 1] Sending full document ({len(content)} chars) to LLM for module inference...")
+        phase1_prompt = f"""You are a business analyst reading a complete requirements document.
+Your task: analyze the FULL document and output a unified, hierarchical module taxonomy for this system.
+
+Rules:
+1. Output 5-15 top-level or two-level module paths that cover ALL major functional areas of the document.
+2. Use concise, business-meaningful Chinese names (e.g., "产品管理", "进件管理 > 进件流程").
+3. Do NOT use document names, version numbers, project names, or author names as module names.
+4. Each path must represent a real business function described in this document.
+5. Output ONLY a JSON array of strings. No explanation, no markdown.
+
+Example output:
+["产品管理", "产品管理 > 产品上下架", "进件管理", "进件管理 > 进件流程", "渠道管理", "预授信管理"]
+
+Full Document Content:
+{content[:80000]}
+"""
+        AGENT_API_URL = os.getenv('AGENT_API_URL', 'http://localhost:8002')
+        r = _requests.post(f"{AGENT_API_URL}/llm-complete", json={
+            "prompt": phase1_prompt,
+            "provider": llm_provider,
+            "max_tokens": 1024,
+        }, timeout=120)
+
+        if r.status_code == 200:
+            raw = r.json().get("text", "")
+            # Extract JSON array from response
+            import re as _re
+            match = _re.search(r'\[.*?\]', raw, _re.DOTALL)
+            if match:
+                inferred_paths = json.loads(match.group(0))
+                print(f"[Phase 1] LLM inferred {len(inferred_paths)} modules: {inferred_paths[:5]}...")
+                # Merge inferred paths with any existing taxonomy
+                combined_paths = list(taxonomy_paths.keys()) + [p for p in inferred_paths if p not in taxonomy_paths]
+                doc_inferred_taxonomy = "Available Categories (Inferred from full document):\n" + \
+                    "\n".join([f"- {p}" for p in combined_paths])
+                print(f"[Phase 1] Final taxonomy has {len(combined_paths)} categories.")
+            else:
+                print(f"[Phase 1] Could not parse JSON from LLM response, using existing taxonomy. Raw: {raw[:200]}")
+        else:
+            print(f"[Phase 1] LLM complete endpoint returned {r.status_code}, using existing taxonomy.")
+    except Exception as e:
+        print(f"[Phase 1] Module inference failed ({e}), proceeding with existing taxonomy.")
+
+    # Use the phase 1 result as the effective taxonomy for all chunks
+    effective_taxonomy = doc_inferred_taxonomy
+
+
     def process_batch(idx, batch_text):
         print(f"[{llm_provider}] Thread started for batch {idx+1}/{total_batches} ({len(batch_text)} chars)")
-        prompt = """
-        Analyze the following text from a technical specification document.
-        
-        ### Master Taxonomy (Reference this for categorization):
-        {taxonomy_content}
-        
-        ### Tasks:
-        1. **Classify**: Identify the most granular, specific **Category Path** this text belongs to.
-           - Pick exactly ONE full path from the Available Categories above (e.g. "A > B > C").
-        2. **Extract**: Identify key entities and their relationships.
-           - You are operating on a small, dense semantic window. Extract EVERY pertinent domain entity.
-           - **CRITICAL DE-DUPLICATION RULE**: Do NOT extract any entity whose name is literally identical to the category. The system already models the hierarchy; extracting it again as a standalone entity creates graph pollution.
-        
-        Target Entity Types:
-        - **Person/Role**: (e.g., "出质人", "承兑方", "复核员")
-        - **System/Component**: (e.g., "票交所", "前置机", "黑名单系统")
-        - **BusinessState**: (e.g., "已出票", "待签收", "CS01")
-        - **DataEntity/Protocol**: (e.g., "CIM.001.002", "大额支付行号", "提示付款金额")
-        - **Action/Operation**: (e.g., "保证撤销", "质押解除申请", "自动应答")
-        - **BusinessConcept**: (e.g., "背书转让", "备用清算路径")
+        prompt = f"""You are a Knowledge Graph extraction expert analyzing a Chinese business requirements document.
 
-        Return TRUE logical combinations.
-        
-        Return JSON format:
-        {{
-          "category_path": "One full exact path from the taxonomy list above, or 'Uncategorized'",
-          "nodes": [{{"name": "Entity Name", "type": "Entity Type"}}],
-          "edges": [{{"source": "Entity Name", "target": "Entity Name", "relation": "RELATIONSHIP_TYPE"}}],
-          "valid_json": true
-        }}
-        
-        Text Block:
-        {batch_text}
-        """
+### Master Taxonomy (Reference for categorization):
+{effective_taxonomy}
+
+### STEP 1 — NOISE FILTER (DO NOT extract these as entities):
+- Document metadata: author names, review dates, version numbers, department approval chains from cover pages
+- Table of contents entries and section numbers
+- Words that are identical to category names already in the taxonomy above
+
+### STEP 2 — ENTITY EXTRACTION (9 strict types, use ONLY these):
+1. Role         — business roles/actors: 出质人, 营销人员, 复核员, 链信企业客户
+2. System       — IT systems, apps, backends: 云贷系统, 云税系统, 链信APP, 云租后台
+3. UIPage       — named UI screens/pages: 进件页, 产品详情页, 预授信管理列表
+4. BusinessRule — conditions, constraints, validation rules (see STEP 3 patterns)
+5. BusinessState— workflow states: 生效中, 已失效, 待审核, 上架中
+6. DataEntity   — data fields/objects: 申请编号, 渠道ID, 授权书, 企业信息
+7. API          — interface names: 归集申请接收接口, 授权回调接口
+8. BusinessConcept — domain abstractions: 预授信, 返佣分润, 背书转让
+9. Action       — operations/processes: 进件申请, 归集授权, 产品排序
+
+DO NOT invent types outside these 9. If unsure, use BusinessConcept.
+
+### STEP 3 — MANDATORY BusinessRule Detection:
+Scan for these patterns — any match MUST produce a BusinessRule entity:
+- Conditional: "当...时", "若...则", "满足...才能", "如果...否则"
+- Numeric constraints: amount limits, quantity limits, time limits
+- State transitions: "从A状态变为B状态的条件"
+- Field validation: "必填", "非必填", "格式要求", "不能超过"
+
+### STEP 4 — RELATIONSHIPS (use ONLY these):
+BELONGS_TO | TRIGGERS | REQUIRES | VALIDATES | CALLS_API | HAS_STATE | OPERATED_BY | CONFIGURED_BY
+
+### OUTPUT — JSON only, no markdown:
+{{
+  "category_path": "Full path from taxonomy above, or 'Uncategorized'",
+  "nodes": [{{"name": "Entity Name", "type": "one of the 9 types above"}}],
+  "edges": [{{"source": "Entity Name", "target": "Entity Name", "relation": "RELATION_TYPE"}}],
+  "valid_json": true
+}}
+
+Text Block:
+{batch_text}
+"""
 
         max_retries = 3
         retry_delay = 2
@@ -564,7 +742,7 @@ def check_document_conflicts(filename):
         print(f"Error checking global conflicts for {filename}: {e}")
         return False
 
-def process_file(file_path, document_id=None, project_name=None, status="EFFECTIVE"):
+def process_file(file_path, document_id=None, project_name=None, project_id=None, status="EFFECTIVE"):
     print(f"Processing. file: {file_path}, document_id: {document_id}, status: {status}")
     if not os.path.exists(file_path):
         return False
@@ -609,7 +787,7 @@ def process_file(file_path, document_id=None, project_name=None, status="EFFECTI
             
         print(f"Converted to {output_path} using local extractors")
 
-        ingest_to_vector_db(filename, md_content, domain_id, project_name, status)
+        ingest_to_vector_db(filename, md_content, domain_id, project_name, project_id, status)
         extract_and_ingest_graph(filename, md_content, domain_id, project_name, status)
 
         if document_id:
@@ -620,8 +798,9 @@ def process_file(file_path, document_id=None, project_name=None, status="EFFECTI
                     doc.status = "NEEDS_REVIEW"
                     print("Set status to NEEDS_REVIEW due to conflicts.")
                 else:
-                    doc.status = status # Use requested status (e.g. DRAFT)
-                    print(f"Set status to {status}.")
+                    # SUCCESS: mark as EFFECTIVE so Smart Chat can retrieve it
+                    doc.status = "EFFECTIVE"
+                    print(f"Set status to EFFECTIVE.")
                 db.commit()
                 
         return True
@@ -664,10 +843,11 @@ def main():
                     file_path = job.get('filePath')
                     document_id = job.get('documentId')
                     project_name = job.get('projectName')
+                    project_id = job.get('projectId')
                     
                     if file_path:
                         status = job.get('status', 'EFFECTIVE')
-                        process_file(file_path, document_id, project_name, status)
+                        process_file(file_path, document_id, project_name, project_id, status)
                     else:
                         print("Invalid job format: missing filePath")
                 except json.JSONDecodeError:

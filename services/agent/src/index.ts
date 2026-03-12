@@ -229,8 +229,8 @@ async function main() {
                         toolResult = await requirementAnalyzer({ action: name === 'check_conflict' ? 'check_conflict' : name, ...args, requirement_text: args.new_requirement || undefined });
                     } else if (name === "trace_dependencies" || name === "simulate_impact" || name === "explain_lineage") {
                         toolResult = await dependencyImpactAnalyzer({ action: name, ...args });
-                    } else if (name === "get_taxonomy" || name === "propose_new_category" || name === "write_subgraph") {
-                        toolResult = await knowledgeOrchestrator({ action: name, ...args });
+                    } else if (name === "knowledge_orchestrator") {
+                        toolResult = await knowledgeOrchestrator({ ...args });
                     } else if (name === "generate_tests") {
                         toolResult = await generateTests(args);
                     } else {

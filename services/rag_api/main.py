@@ -19,7 +19,7 @@ dotenv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.pa
 load_dotenv(dotenv_path)
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from python_services.db import get_db, Document, Domain, TaxonomyNode, SessionLocal, TaxonomySuggestion
+from python_services.db import get_db, Document, Domain, TaxonomyNode, SessionLocal, TaxonomySuggestion, Project
 from sqlalchemy.orm import Session
 from fastapi import Depends, Form, UploadFile, File
 import traceback
@@ -577,6 +577,75 @@ async def get_documents(db: Session = Depends(get_db)):
         })
     return res
 
+@app.get("/projects")
+async def get_projects(domainId: Optional[str] = None, db: Session = Depends(get_db)):
+    query = db.query(Project)
+    if domainId:
+        query = query.filter(Project.domainId == domainId)
+    projects = query.order_by(Project.createdAt.desc()).all()
+    res = []
+    # Status priority: NEEDS_REVIEW > PROCESSING > ERROR > EFFECTIVE > DRAFT
+    STATUS_PRIORITY = {"NEEDS_REVIEW": 5, "PROCESSING": 4, "ERROR": 3, "EFFECTIVE": 2, "DRAFT": 1}
+    for p in projects:
+        active_docs = [d for d in p.documents if d.status not in ("ARCHIVED", "SANDBOX")]
+        if active_docs:
+            agg_status = max(active_docs, key=lambda d: STATUS_PRIORITY.get(d.status, 0)).status
+        else:
+            agg_status = p.status
+        res.append({
+            "id": p.id,
+            "name": p.name,
+            "version": p.version,
+            "jiraId": p.jiraId,
+            "status": agg_status,
+            "createdAt": p.createdAt.isoformat(),
+            "documentCount": len(active_docs)
+        })
+    return res
+
+class ProjectCreate(BaseModel):
+    name: str
+    version: str = "v1.0"
+    jiraId: Optional[str] = None
+    domainId: Optional[str] = None
+
+@app.post("/projects")
+async def create_project(req: ProjectCreate, db: Session = Depends(get_db)):
+    new_project = Project(
+        id=str(uuid.uuid4()),
+        name=req.name,
+        version=req.version,
+        jiraId=req.jiraId,
+        domainId=req.domainId,
+        status="DRAFT"
+    )
+    db.add(new_project)
+    db.commit()
+    
+    # Optional: Initial project node in Neo4j
+    if neo4j_driver:
+        try:
+            with neo4j_driver.session() as session:
+                session.run(
+                    """
+                    MERGE (p:Project {id: $pid})
+                    SET p.name = $name, p.version = $version, p.jiraId = $jiraId
+                    """,
+                    pid=new_project.id, name=new_project.name, version=new_project.version, jiraId=new_project.jiraId
+                )
+        except Exception as e:
+            print(f"Warning: Failed to create Project node in Neo4j: {str(e)}")
+            
+    return {"status": "success", "id": new_project.id}
+
+@app.get("/projects/{project_id}/documents")
+async def get_project_documents(project_id: str, db: Session = Depends(get_db)):
+    docs = db.query(Document).filter(
+        Document.projectId == project_id,
+        ~Document.status.in_(["ARCHIVED", "SANDBOX"])
+    ).order_by(Document.createdAt.desc()).all()
+    return [{"id": d.id, "filename": d.filename, "status": d.status, "createdAt": d.createdAt.isoformat()} for d in docs]
+
 @app.get("/projects/{project_name}/versions")
 async def get_project_versions(project_name: str, db: Session = Depends(get_db)):
     """
@@ -867,6 +936,15 @@ async def retrieve(request: QueryRequest, db: Session = Depends(get_db)):
                 Document.projectName.ilike(f"%{request.project_name}%")
             )
         )
+    elif request.domain_id:
+        # Domain-level docs: include DRAFT/SANDBOX from this domain even without a project context.
+        # This allows domain-wide knowledge docs (uploaded as DRAFT) to be visible in Smart Chat.
+        conditions.append(
+            and_(
+                Document.status.in_(["DRAFT", "SANDBOX"]),
+                Document.domainId == request.domain_id
+            )
+        )
         
     if request.document_ids:
         conditions.append(
@@ -877,6 +955,7 @@ async def retrieve(request: QueryRequest, db: Session = Depends(get_db)):
         )
         
     doc_query = base_query.filter(or_(*conditions))
+
     
     matching_docs = doc_query.all()
     
@@ -1299,44 +1378,86 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @app.post("/upload")
 async def upload_document(
-    file: UploadFile = File(...),
+    file: UploadFile = File(None), # Legacy single upload support
+    files: List[UploadFile] = File(None),
     domainId: str = Form(None),
-    projectName: str = Form(None),
+    projectId: str = Form(None), # New schema linking
+    projectName: str = Form(None), 
     jiraId: str = Form(None),
     version: str = Form("v1.0"),
     status: str = Form("DRAFT"), # Optional status override
     db: Session = Depends(get_db)
 ):
     try:
-        file_path = os.path.join(UPLOAD_DIR, file.filename)
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        # Determine files to process
+        process_files = []
+        if files:
+            process_files.extend([f for f in files if getattr(f, 'filename', None)])
+        if file and getattr(file, 'filename', None):
+            process_files.append(file)
             
-        doc_id = str(uuid.uuid4())
-        doc = Document(
-            id=doc_id,
-            filename=file.filename,
-            version=version,
-            projectName=projectName,
-            domainId=domainId,
-            jiraId=jiraId,
-            status=status # Use the provided status
-        )
-        db.add(doc)
-        db.commit()
+        if not process_files:
+            raise HTTPException(status_code=400, detail="No valid files provided")
+
+        queued_docs = []
         
-        # 2. Push to Redis Queue
-        job = {
-            "type": "ingest",
-            "filePath": file_path,
-            "filename": file.filename,
-            "projectName": projectName,
-            "documentId": doc_id,
-            "status": status # Pass status to worker
-        }
-        redis_client.rpush("nexis:ingest:queue", json.dumps(job))
-        
-        return {"status": "success", "file_id": doc_id, "message": f"File {file.filename} queued for ingestion."}
+        # If projectId exists, fetch the actual project to sync metadata
+        project = None
+        if projectId:
+            project = db.query(Project).filter(Project.id == projectId).first()
+            if project:
+                projectName = project.name
+                jiraId = project.jiraId
+                version = project.version
+                
+        for f in process_files:
+            file_path = os.path.join(UPLOAD_DIR, f.filename)
+            with open(file_path, "wb") as buffer:
+                shutil.copyfileobj(f.file, buffer)
+                
+            doc_id = str(uuid.uuid4())
+            doc = Document(
+                id=doc_id,
+                filename=f.filename,
+                version=version,
+                projectId=projectId,
+                projectName=projectName,
+                domainId=domainId,
+                jiraId=jiraId,
+                status="QUEUED"  # Always start as QUEUED — worker owns subsequent transitions
+            )
+            db.add(doc)
+            db.commit()
+            
+            # Optional: Link Document to Project in Graph
+            if neo4j_driver and projectId:
+                try:
+                    with neo4j_driver.session() as session:
+                        session.run(
+                            """
+                            MERGE (d:Document {name: $filename})
+                            MERGE (p:Project {id: $pid})
+                            MERGE (d)-[:BELONGS_TO_PROJECT]->(p)
+                            """,
+                            filename=f.filename, pid=projectId
+                        )
+                except Exception as e:
+                    print(f"Warning: Failed to link Document to Project in Neo4j: {str(e)}")
+
+            # Push to Redis Queue
+            job = {
+                "type": "ingest",
+                "filePath": file_path,
+                "filename": f.filename,
+                "projectId": projectId,
+                "projectName": projectName,
+                "documentId": doc_id,
+                "status": status # Pass status to worker
+            }
+            redis_client.rpush("nexis:ingest:queue", json.dumps(job))
+            queued_docs.append(doc_id)
+            
+        return {"status": "success", "file_ids": queued_docs, "message": f"{len(queued_docs)} files queued for ingestion."}
     except Exception as e:
         db.rollback()
         traceback.print_exc()
