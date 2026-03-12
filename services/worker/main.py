@@ -567,7 +567,7 @@ Text Block:
                     time.sleep(retry_delay * (attempt + 1))
                 else:
                     print(f"Skipping batch {idx} after max retries.")
-                    return None
+                    return {"status": "error", "error": str(e)}
                     
     # Step: Execute ThreadPool
     nodes_extracted = 0
@@ -576,6 +576,8 @@ Text Block:
         for future in as_completed(futures):
             res = future.result()
             if res:
+                   if isinstance(res, dict) and res.get("status") == "error":
+                       raise Exception(f"Batch inference failed: {res.get('error')}")
                    nodes_extracted += res
                    
     print(f"--- Concurrent Agentic Ingestion Complete --- Batches processed: {nodes_extracted}")
