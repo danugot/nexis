@@ -9,7 +9,7 @@ export const getApiBaseUrl = () => {
     const rawBaseUrl = import.meta.env.VITE_BASE_URL || '/';
     const baseUrl = normalizePath(rawBaseUrl);
     
-    if (envUrl) return envUrl;
+    if (envUrl && envUrl.startsWith('http')) return envUrl;
     
     // Default fallback for local development
     if (baseUrl === '/') {
@@ -19,6 +19,7 @@ export const getApiBaseUrl = () => {
     // In subpath deployment, use relative-to-root path
     // This ensures we always have /nexis/api
     return `${baseUrl}api`;
+
 };
 
 export const getAgentApiUrl = () => {
@@ -26,13 +27,14 @@ export const getAgentApiUrl = () => {
     const rawBaseUrl = import.meta.env.VITE_BASE_URL || '/';
     const baseUrl = normalizePath(rawBaseUrl);
     
-    if (envUrl) return envUrl;
+    if (envUrl && envUrl.startsWith('http')) return envUrl;
 
     if (baseUrl === '/') {
         return `http://${window.location.hostname}:8002`;
     }
     
     return `${baseUrl}agent`;
+
 };
 
 
