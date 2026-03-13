@@ -57,7 +57,15 @@ export default function GraphExplorer() {
             }
 
             const response = await axios.get(`${getApiBaseUrl()}/graph/visualize?${params.toString()}`);
-            setData(response.data);
+            
+            // Defensive check: ensure we got valid JSON with expected structure
+            if (response.data && Array.isArray(response.data.nodes)) {
+                setData(response.data);
+            } else {
+                console.warn("Received invalid graph data structure:", response.data);
+                setData({ nodes: [], links: [] });
+            }
+
 
             // Auto fit after a short delay to allow graph placement
             setTimeout(() => {
