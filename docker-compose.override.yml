@@ -1,0 +1,15 @@
+# Nexis Docker Compose Override (for Tencent Cloud)
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.override.yml up -d
+
+services:
+  web-ui:
+    networks:
+      - app-network
+
+  agent_api:
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    external: true

@@ -12,6 +12,9 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: always
+    networks:
+      - nexis-net
+
 
   redis:
     image: redis:7.0
@@ -19,6 +22,9 @@ services:
     ports:
       - "6380:6379"
     restart: always
+    networks:
+      - nexis-net
+
 
   chroma:
     image: chromadb/chroma:latest
@@ -30,6 +36,9 @@ services:
     environment:
       - IS_PERSISTENT=TRUE
     restart: always
+    networks:
+      - nexis-net
+
 
   neo4j:
     image: neo4j:5.12-community
@@ -42,6 +51,9 @@ services:
     volumes:
       - neo4j_data:/data
     restart: always
+    networks:
+      - nexis-net
+
 
   rag_api:
     build: 
@@ -72,6 +84,9 @@ services:
       - ./processed_docs:/app/processed_docs
       - ./python_services:/app/python_services
       - ./services/rag_api:/app/services/rag_api
+    networks:
+      - nexis-net
+
 
   worker:
     build: 
@@ -102,6 +117,9 @@ services:
       - ./processed_docs:/app/processed_docs
       - ./python_services:/app/python_services
       - ./services/worker:/app/services/worker
+    networks:
+      - nexis-net
+
 
   agent_api:
     build: ./services/agent
@@ -123,6 +141,9 @@ services:
     volumes:
       - ./services/agent:/app
       - /app/node_modules
+    networks:
+      - nexis-net
+
 
   web-ui:
     build: ./web-ui
@@ -136,6 +157,9 @@ services:
     volumes:
       - ./web-ui:/app
       - /app/node_modules
+    networks:
+      - nexis-net
+
     stdin_open: true
     tty: true
     depends_on:
@@ -146,3 +170,8 @@ volumes:
   chroma_data:
   neo4j_data:
   postgres_data:
+
+networks:
+  nexis-net:
+    driver: bridge
+
