@@ -16,6 +16,12 @@ export default defineConfig(({ mode }) => {
     server: {
       host: true,
       allowedHosts: ["nexis.ahagoing.cc", "www.quirklabs.top"],
+      hmr: {
+        protocol: env.VITE_HMR_PROTOCOL || undefined,
+        host: env.VITE_HMR_HOST || undefined,
+        port: env.VITE_HMR_PORT ? parseInt(env.VITE_HMR_PORT) : undefined,
+        clientPort: env.VITE_HMR_CLIENT_PORT ? parseInt(env.VITE_HMR_CLIENT_PORT) : undefined,
+      },
       proxy: {
         '/api': {
           target: 'http://rag_api:8000',
