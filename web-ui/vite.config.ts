@@ -15,7 +15,7 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       host: true,
-      allowedHosts: ["nexis.ahagoing.cc"],
+      allowedHosts: ["nexis.ahagoing.cc", "www.quirklabs.top"],
       proxy: {
         '/api': {
           target: 'http://rag_api:8000',
