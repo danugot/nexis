@@ -154,6 +154,8 @@ services:
       # These must be relative paths to use the Vite proxy for remote access
       - VITE_API_BASE_URL=/api
       - VITE_AGENT_API_URL=/agent
+      - VITE_BASE_URL=${VITE_BASE_URL}
+
     volumes:
       - ./web-ui:/app
       - /app/node_modules
