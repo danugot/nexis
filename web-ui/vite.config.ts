@@ -23,17 +23,18 @@ export default defineConfig(({ mode }) => {
         clientPort: env.VITE_HMR_CLIENT_PORT ? parseInt(env.VITE_HMR_CLIENT_PORT) : undefined,
       },
       proxy: {
-        '/api': {
+        [`${env.VITE_BASE_URL || '/'}api`]: {
           target: 'http://rag_api:8000',
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api/, '')
+          rewrite: (path) => path.replace(new RegExp(`^${env.VITE_BASE_URL || '/'}api`), '')
         },
-        '/agent': {
+        [`${env.VITE_BASE_URL || '/'}agent`]: {
           target: 'http://agent_api:8002',
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/agent/, '')
+          rewrite: (path) => path.replace(new RegExp(`^${env.VITE_BASE_URL || '/'}agent`), '')
         }
       }
+
     }
   }
 })
